@@ -1,0 +1,152 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-bg:      #fdfcf8;
+    --color-surface: #ffffff;
+    --color-border:  #e8e4da;
+    --color-text:    #1a1a1a;
+    --color-muted:   #6b6b6b;
+    --color-brand:   #466646;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply font-body text-sm antialiased;
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    min-height: 100dvh;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-display;
+  }
+}
+
+@layer components {
+  /* ── Buttons ─────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl
+           px-4 py-2.5 text-sm font-body font-medium
+           transition-all duration-150 select-none
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-sage-500 focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-sage-600 text-white hover:bg-sage-700 active:scale-95 shadow-soft;
+  }
+
+  .btn-secondary {
+    @apply btn bg-cream-100 text-sage-800 border border-cream-300
+           hover:bg-cream-200 active:scale-95;
+  }
+
+  .btn-ghost {
+    @apply btn text-sage-700 hover:bg-sage-50 active:scale-95;
+  }
+
+  .btn-danger {
+    @apply btn bg-red-50 text-red-600 border border-red-200
+           hover:bg-red-100 active:scale-95;
+  }
+
+  .btn-lg {
+    @apply px-6 py-3.5 text-base rounded-2xl;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs rounded-lg;
+  }
+
+  /* ── Cards ───────────────────────────────────── */
+  .card {
+    @apply bg-white rounded-2xl border border-cream-200 shadow-soft;
+  }
+
+  .card-hover {
+    @apply card transition-all duration-200 hover:shadow-card hover:-translate-y-0.5;
+  }
+
+  /* ── Inputs ──────────────────────────────────── */
+  .input {
+    @apply w-full rounded-xl border border-cream-300 bg-white px-3.5 py-2.5 text-sm
+           placeholder:text-sage-300 text-sage-900
+           focus:outline-none focus:ring-2 focus:ring-sage-400 focus:border-transparent
+           transition-shadow duration-150;
+  }
+
+  .input-label {
+    @apply block text-xs font-medium text-sage-700 mb-1.5 uppercase tracking-wide;
+  }
+
+  /* ── Badges ──────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold
+           uppercase tracking-wider border;
+  }
+
+  /* ── Page shell ──────────────────────────────── */
+  .page-container {
+    @apply max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8;
+  }
+
+  /* ── Section heading ─────────────────────────── */
+  .section-title {
+    @apply font-display text-2xl sm:text-3xl text-sage-900 leading-tight;
+  }
+
+  /* ── Meal category colors ────────────────────── */
+  .cat-breakfast { @apply bg-amber-50  border-amber-200; }
+  .cat-lunch     { @apply bg-lime-50   border-lime-200;  }
+  .cat-dinner    { @apply bg-indigo-50 border-indigo-200;}
+  .cat-snack     { @apply bg-rose-50   border-rose-200;  }
+
+  /* ── Skeleton loader ─────────────────────────── */
+  .skeleton {
+    @apply bg-cream-200 rounded-lg animate-pulse;
+  }
+
+  /* ── Safe area padding for mobile ────────────── */
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* ── Scrollbar styling ─────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cddccd;
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a8c2a8;
+}
+
+/* ── React Hot Toast overrides ─────────────────── */
+.react-hot-toast > div {
+  font-family: 'DM Sans', sans-serif !important;
+  font-size: 14px !important;
+}

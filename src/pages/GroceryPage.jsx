@@ -1,259 +1,227 @@
 import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlans } from '../hooks/usePlans'
-import { buildGroceryList, DAYS, CATEGORIES, CATEGORY_ICONS } from '../lib/mealLogic'
-import {
-  ShoppingCart, CheckSquare, Square, ChevronDown,
-  RefreshCcw, Download, Loader2, Info
-} from 'lucide-react'
-
-// We store the active weekly plan in sessionStorage so GroceryPage
-// can read it even after navigating away from PlannerPage.
-// PlannerPage writes to sessionStorage on every plan generation.
-const SESSION_KEY = 'mealplan_current'
-
-function loadPlanFromSession() {
-  try {
-    const raw = sessionStorage.getItem(SESSION_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
+import { usePlanStore } from '../hooks/usePlanStore'
+import { buildGroceryList } from '../lib/mealLogic'
+import { ShoppingCart, CheckCircle2, Square, Download, Info, Sparkles, ArrowRight } from 'lucide-react'
 
 export function savePlanToSession(plan) {
-  try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(plan))
-  } catch {}
+  try { sessionStorage.setItem('mealplan_current', JSON.stringify(plan)) } catch {}
+}
+export function loadPlanFromSession() {
+  try { return JSON.parse(sessionStorage.getItem('mealplan_current') || 'null') } catch { return null }
 }
 
 export default function GroceryPage() {
-  const navigate   = useNavigate()
-  const { plans, loading: plansLoading, loadPlan } = usePlans()
-
-  const [weeklyPlan, setWeeklyPlan] = useState(() => loadPlanFromSession())
-  const [checked,    setChecked]    = useState({})   // { ingredient: true/false }
-  const [showMeals,  setShowMeals]  = useState(true)
+  const navigate = useNavigate()
+  const { plans, loadPlan: loadSavedPlan } = usePlans()
+  const { weeklyPlan, loadPlan: storeLoadPlan } = usePlanStore()
+  const [checked,        setChecked]        = useState({})
+  const [showMeals,      setShowMeals]      = useState(true)
   const [selectedPlanId, setSelectedPlanId] = useState('')
 
-  // Build grocery map from active plan
-  const groceryMap = useMemo(() => {
-    if (!weeklyPlan) return {}
-    return buildGroceryList(weeklyPlan)
-  }, [weeklyPlan])
+  const groceryMap   = useMemo(() => weeklyPlan ? buildGroceryList(weeklyPlan) : {}, [weeklyPlan])
+  const ingredients  = useMemo(() => Object.keys(groceryMap).sort(), [groceryMap])
+  const checkedCount = ingredients.filter(i => checked[i]).length
+  const progress     = ingredients.length ? Math.round((checkedCount / ingredients.length) * 100) : 0
 
-  const sortedIngredients = useMemo(() =>
-    Object.keys(groceryMap).sort(), [groceryMap]
-  )
-
-  const checkedCount = sortedIngredients.filter(i => checked[i]).length
-
-  // ── Handlers ─────────────────────────────────────────────
-  function toggle(ingredient) {
-    setChecked(prev => ({ ...prev, [ingredient]: !prev[ingredient] }))
-  }
-
-  function selectAll()  { setChecked(Object.fromEntries(sortedIngredients.map(i => [i, true])))  }
+  function toggle(ing)  { setChecked(p => ({ ...p, [ing]: !p[ing] })) }
+  function selectAll()  { setChecked(Object.fromEntries(ingredients.map(i => [i, true]))) }
   function clearAll()   { setChecked({}) }
 
-  function handleLoadSavedPlan(planId) {
-    const plan = plans.find(p => p.id === planId)
+  function handleLoadPlan(id) {
+    const plan = plans.find(p => p.id === id)
     if (!plan) return
-    const loaded = loadPlan(plan)
-    setWeeklyPlan(loaded)
+    storeLoadPlan(loadSavedPlan(plan))
     setChecked({})
-    setSelectedPlanId(planId)
+    setSelectedPlanId(id)
   }
 
-  function exportChecklist() {
+  function exportTxt() {
     const lines = [
       '# Grocery List',
       `Generated: ${new Date().toLocaleDateString()}`,
       '',
-      ...sortedIngredients.map(i => {
-        const status = checked[i] ? '[x]' : '[ ]'
-        const meals  = groceryMap[i]?.slice(0, 3).join(', ') || ''
-        return `${status} ${i.charAt(0).toUpperCase() + i.slice(1)}  (${meals})`
-      }),
+      ...ingredients.map(i => `${checked[i] ? '[x]' : '[ ]'} ${i.charAt(0).toUpperCase() + i.slice(1)}`)
     ]
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' })
-    const url  = URL.createObjectURL(blob)
-    const a    = document.createElement('a')
-    a.href = url; a.download = 'grocery-list.txt'
-    a.click(); URL.revokeObjectURL(url)
+    const a = document.createElement('a')
+    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' }))
+    a.download = 'grocery-list.txt'
+    a.click()
   }
 
-  // ── Empty state ───────────────────────────────────────────
-  if (!weeklyPlan) {
-    return (
-      <div className="page-container animate-fade-in">
-        <h1 className="section-title mb-2">Grocery List</h1>
-        <p className="text-sage-500 text-sm mb-8">
-          Generate a weekly plan first, or load a saved one below.
-        </p>
+  // ── Empty state ────────────────────────────────────────
+  if (!weeklyPlan) return (
+    <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
+      <span className="page-eyebrow">Grocery List</span>
+      <h1 className="section-title mb-2">What to buy</h1>
+      <p style={{ color: 'var(--text-3)', fontSize: '15px', marginBottom: '32px' }}>
+        Generate a plan first, or load a saved one below.
+      </p>
 
-        <div className="card p-6 flex flex-col items-center text-center gap-4 mb-6">
-          <div className="w-16 h-16 rounded-2xl bg-sage-100 flex items-center justify-center">
-            <ShoppingCart size={28} className="text-sage-400" />
-          </div>
-          <div>
-            <h3 className="font-display text-lg text-sage-800 mb-1">No active plan</h3>
-            <p className="text-sm text-sage-400">
-              Head to the Planner tab to generate a week, then come back here.
-            </p>
-          </div>
-          <button onClick={() => navigate('/planner')} className="btn-primary btn">
-            Go to Planner
-          </button>
+      <div className="card p-10 flex flex-col items-center text-center mb-5"
+        style={{ animation: 'slideUp 0.4s ease' }}>
+        <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
+          style={{ background: 'linear-gradient(135deg,rgba(31,158,98,0.1),rgba(31,158,98,0.04))', border: '1.5px solid rgba(31,158,98,0.15)', animation: 'float 3s ease-in-out infinite' }}>
+          <ShoppingCart size={32} style={{ color: 'var(--brand)' }} />
         </div>
-
-        {/* Load from saved */}
-        {!plansLoading && plans.length > 0 && (
-          <div className="card p-5">
-            <h3 className="font-semibold text-sage-800 mb-3 text-sm">Or load a saved plan</h3>
-            <div className="space-y-2">
-              {plans.map(plan => (
-                <button
-                  key={plan.id}
-                  onClick={() => handleLoadSavedPlan(plan.id)}
-                  className="w-full text-left px-4 py-3 rounded-xl border border-cream-200 hover:border-sage-300 hover:bg-sage-50 transition-all text-sm"
-                >
-                  <span className="font-medium text-sage-800">{plan.name}</span>
-                  <span className="text-sage-400 ml-2 text-xs">
-                    {new Date(plan.created_at).toLocaleDateString()}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        <h3 className="font-display font-semibold mb-2" style={{ fontSize: '22px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
+          No plan active yet
+        </h3>
+        <p style={{ color: 'var(--text-3)', fontSize: '15px', marginBottom: '24px', maxWidth: '320px' }}>
+          Head to the Planner, generate your week, then come back here for your full grocery list.
+        </p>
+        <button onClick={() => navigate('/planner')} className="btn-primary btn btn-lg">
+          <Sparkles size={17} /> Go to Planner <ArrowRight size={16} />
+        </button>
       </div>
-    )
-  }
 
-  // ── Main grocery list ─────────────────────────────────────
+      {plans.length > 0 && (
+        <div className="card p-6" style={{ animation: 'slideUp 0.4s ease 0.1s both' }}>
+          <p className="font-semibold mb-4" style={{ fontSize: '16px', color: 'var(--text)' }}>
+            Or load a saved plan
+          </p>
+          <div className="space-y-2">
+            {plans.map(plan => (
+              <button key={plan.id} onClick={() => handleLoadPlan(plan.id)}
+                className="w-full text-left px-5 py-4 rounded-xl border-2 transition-all duration-200 hover:scale-[1.01]"
+                style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--brand)'}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                <span className="font-semibold" style={{ fontSize: '15px' }}>{plan.name}</span>
+                <span className="ml-3" style={{ fontSize: '13px', color: 'var(--text-3)' }}>
+                  {new Date(plan.created_at).toLocaleDateString()}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  // ── Main grocery list ──────────────────────────────────
   return (
-    <div className="page-container animate-fade-in">
+    <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
+
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-7">
         <div>
-          <h1 className="section-title">Grocery List</h1>
-          <p className="text-sage-500 text-sm mt-1">
-            {checkedCount} of {sortedIngredients.length} items checked
+          <span className="page-eyebrow">Grocery List</span>
+          <h1 className="section-title">What to buy</h1>
+          <p style={{ color: 'var(--text-3)', fontSize: '15px', marginTop: '6px' }}>
+            {checkedCount} of {ingredients.length} items checked
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          <button onClick={exportChecklist} className="btn-secondary btn-sm btn">
-            <Download size={14} /> Export
-          </button>
-          <button onClick={() => { setWeeklyPlan(null); setChecked({}) }} className="btn-ghost btn-sm btn">
-            <RefreshCcw size={14} /> Reset
+        <div className="flex gap-2.5">
+          <button onClick={exportTxt} className="btn-secondary btn">
+            <Download size={16} /> Export
           </button>
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div className="card p-4 mb-5">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-sage-600">Shopping progress</span>
-          <span className="text-xs text-sage-400">
-            {sortedIngredients.length > 0
-              ? Math.round((checkedCount / sortedIngredients.length) * 100)
-              : 0}%
+      {/* Progress card */}
+      <div className="card p-5 mb-5" style={{ animation: 'slideUp 0.4s ease 0.05s both' }}>
+        <div className="flex items-center justify-between mb-3">
+          <span className="font-semibold" style={{ fontSize: '15px', color: 'var(--text)' }}>
+            Shopping progress
+          </span>
+          <span className="font-mono font-bold" style={{ fontSize: '22px', color: 'var(--brand)', letterSpacing: '-0.04em' }}>
+            {progress}%
           </span>
         </div>
-        <div className="h-2 bg-cream-200 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-sage-500 rounded-full transition-all duration-300"
-            style={{ width: `${sortedIngredients.length > 0 ? (checkedCount / sortedIngredients.length) * 100 : 0}%` }}
-          />
+        <div className="rounded-full overflow-hidden" style={{ height: '10px', background: 'var(--surface-2)' }}>
+          <div className="h-full rounded-full transition-all duration-700"
+            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#1F9E62,#3AB87D)', boxShadow: progress > 0 ? '0 0 12px rgba(31,158,98,0.4)' : 'none' }} />
         </div>
-        {checkedCount === sortedIngredients.length && sortedIngredients.length > 0 && (
-          <p className="text-center text-sage-600 text-sm font-medium mt-2 animate-fade-in">
+        {progress === 100 && (
+          <p className="text-center font-semibold mt-4" style={{ fontSize: '16px', color: 'var(--brand)', animation: 'scaleIn 0.3s ease' }}>
             🎉 All done! Happy cooking.
           </p>
         )}
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap gap-2 mb-5">
-        <button onClick={selectAll} className="btn-secondary btn-sm btn">
-          <CheckSquare size={14} /> Select all
+      <div className="flex flex-wrap gap-2.5 mb-5" style={{ animation: 'slideUp 0.4s ease 0.1s both' }}>
+        <button onClick={selectAll} className="btn-secondary btn">
+          <CheckCircle2 size={16} /> Select all
         </button>
-        <button onClick={clearAll} className="btn-secondary btn-sm btn">
-          <Square size={14} /> Clear all
+        <button onClick={clearAll} className="btn-secondary btn">
+          <Square size={16} /> Clear all
         </button>
-        <button
-          onClick={() => setShowMeals(v => !v)}
-          className={`btn-sm btn ${showMeals ? 'btn-secondary' : 'btn-ghost'}`}
-        >
-          <Info size={14} />
-          {showMeals ? 'Hide meal info' : 'Show meal info'}
+        <button onClick={() => setShowMeals(v => !v)} className="btn"
+          style={{
+            background: showMeals ? 'rgba(31,158,98,0.1)' : 'var(--surface)',
+            border: `1.5px solid ${showMeals ? 'rgba(31,158,98,0.3)' : 'var(--border)'}`,
+            color: showMeals ? 'var(--brand)' : 'var(--text-3)',
+          }}>
+          <Info size={16} /> {showMeals ? 'Hide' : 'Show'} meal info
         </button>
-
-        {/* Load different plan */}
         {plans.length > 0 && (
-          <div className="relative">
-            <select
-              className="input text-xs py-1.5 pr-8"
-              value={selectedPlanId}
-              onChange={e => handleLoadSavedPlan(e.target.value)}
-            >
-              <option value="">Load a saved plan…</option>
-              {plans.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
+          <select className="input" style={{ width: 'auto', fontSize: '14px' }}
+            value={selectedPlanId} onChange={e => handleLoadPlan(e.target.value)}>
+            <option value="">Switch to saved plan…</option>
+            {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
         )}
       </div>
 
-      {/* Grocery items */}
-      <div className="card divide-y divide-cream-100 overflow-hidden">
-        {sortedIngredients.length === 0 ? (
-          <div className="p-8 text-center text-sage-400 text-sm">No ingredients found.</div>
+      {/* Ingredient list */}
+      <div className="card overflow-hidden" style={{ animation: 'slideUp 0.4s ease 0.15s both' }}>
+        {ingredients.length === 0 ? (
+          <div className="p-10 text-center" style={{ color: 'var(--text-3)', fontSize: '15px' }}>No ingredients found.</div>
         ) : (
-          sortedIngredients.map(ingredient => {
-            const isChecked = !!checked[ingredient]
-            const meals     = groceryMap[ingredient] || []
-
+          ingredients.map((ing, idx) => {
+            const done  = !!checked[ing]
+            const meals = groceryMap[ing] || []
             return (
-              <button
-                key={ingredient}
-                onClick={() => toggle(ingredient)}
-                className={`w-full flex items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-cream-50 ${
-                  isChecked ? 'bg-sage-50' : 'bg-white'
-                }`}
-              >
-                <div className={`mt-0.5 shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
-                  isChecked
-                    ? 'bg-sage-500 border-sage-500'
-                    : 'border-cream-300'
-                }`}>
-                  {isChecked && (
-                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+              <button key={ing} onClick={() => toggle(ing)}
+                className="w-full flex items-start gap-4 px-5 py-4 text-left transition-all duration-150 group"
+                style={{
+                  borderBottom: idx < ingredients.length - 1 ? '1px solid var(--border)' : 'none',
+                  background: done ? 'rgba(31,158,98,0.04)' : 'transparent',
+                }}
+                onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'var(--surface-2)' }}
+                onMouseLeave={e => { e.currentTarget.style.background = done ? 'rgba(31,158,98,0.04)' : 'transparent' }}>
+
+                {/* Checkbox */}
+                <div className="shrink-0 mt-0.5 flex items-center justify-center transition-all duration-200"
+                  style={{
+                    width: '22px', height: '22px', borderRadius: '7px',
+                    border: done ? 'none' : '2px solid var(--border)',
+                    background: done ? 'linear-gradient(135deg,#1F9E62,#167D4D)' : 'var(--surface)',
+                    boxShadow: done ? '0 2px 10px rgba(31,158,98,0.35)' : 'none',
+                    transform: done ? 'scale(1.05)' : 'scale(1)',
+                  }}>
+                  {done && (
+                    <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                     </svg>
                   )}
                 </div>
 
+                {/* Content */}
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-medium capitalize transition-all ${
-                    isChecked ? 'line-through text-sage-400' : 'text-sage-900'
-                  }`}>
-                    {ingredient}
+                  <p className="font-medium capitalize transition-all duration-200"
+                    style={{
+                      fontSize: '15px',
+                      color: done ? 'var(--text-3)' : 'var(--text)',
+                      textDecoration: done ? 'line-through' : 'none',
+                      textDecorationColor: 'var(--text-3)',
+                    }}>
+                    {ing}
                   </p>
                   {showMeals && meals.length > 0 && (
-                    <p className={`text-xs mt-0.5 transition-all ${
-                      isChecked ? 'text-sage-300' : 'text-sage-400'
-                    }`}>
-                      {meals.slice(0, 3).join(' · ')}
-                      {meals.length > 3 && ` +${meals.length - 3} more`}
+                    <p className="mt-0.5 transition-colors duration-200"
+                      style={{ fontSize: '12px', color: done ? 'var(--border)' : 'var(--text-3)' }}>
+                      {meals.slice(0, 3).join(' · ')}{meals.length > 3 ? ` +${meals.length - 3} more` : ''}
                     </p>
                   )}
                 </div>
 
-                <span className="shrink-0 text-xs text-sage-300 font-mono mt-0.5">
+                {/* Count badge */}
+                <span className="shrink-0 font-mono font-semibold px-2 py-0.5 rounded-lg"
+                  style={{ fontSize: '12px', color: done ? 'var(--border)' : 'var(--text-3)', background: 'var(--surface-2)' }}>
                   ×{meals.length}
                 </span>
               </button>

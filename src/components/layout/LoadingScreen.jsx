@@ -1,20 +1,23 @@
 export default function LoadingScreen() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cream-50">
-      <div className="flex flex-col items-center gap-4 animate-fade-in">
-        <div className="w-16 h-16 rounded-2xl bg-sage-600 flex items-center justify-center shadow-card">
-          <span className="text-3xl">🍽</span>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+      <div className="flex flex-col items-center gap-5" style={{ animation: 'fadeIn 0.35s ease' }}>
+        <div className="relative" style={{ width: '72px', height: '72px' }}>
+          <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(135deg,#1F9E62,#0B4529)', animation: 'glowPulse 2.5s ease-in-out infinite' }} />
+          <div className="relative w-full h-full rounded-2xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg,#1F9E62,#0B4529)' }}>
+            <span style={{ fontSize: '32px', animation: 'float 3s ease-in-out infinite' }}>🍽</span>
+          </div>
         </div>
-        <div className="flex gap-1.5">
-          {[0, 1, 2].map(i => (
-            <div
-              key={i}
-              className="w-2 h-2 rounded-full bg-sage-400 animate-bounce"
-              style={{ animationDelay: `${i * 0.15}s` }}
-            />
+        <div className="flex gap-2">
+          {[0,1,2].map(i => (
+            <div key={i} className="rounded-full animate-bounce"
+              style={{ width: '8px', height: '8px', background: 'var(--brand)', opacity: 0.7, animationDelay: `${i * 120}ms` }} />
           ))}
         </div>
-        <p className="text-sm text-sage-500 font-body">Loading your meal planner…</p>
+        <p style={{ fontSize: '12px', fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-3)' }}>
+          Loading
+        </p>
       </div>
     </div>
   )

@@ -1,43 +1,25 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlans } from '../hooks/usePlans'
+import { usePlanStore } from '../hooks/usePlanStore'
 import { DAYS, CATEGORIES, CATEGORY_ICONS } from '../lib/mealLogic'
-import { savePlanToSession } from './GroceryPage'
 import { exportToPDF } from '../lib/pdfExport'
 import { useAuth } from '../hooks/useAuth'
-import {
-  Bookmark, Trash2, Eye, Download,
-  ShoppingCart, Loader2, CalendarDays
-} from 'lucide-react'
+import { Bookmark, Trash2, Eye, EyeOff, Download, ShoppingCart, Loader2, CalendarDays, Sparkles } from 'lucide-react'
 
 export default function SavedPage() {
   const { plans, loading, deletePlan, loadPlan } = usePlans()
   const { profile } = useAuth()
-  const navigate = useNavigate()
-  const [expandedId, setExpandedId]   = useState(null)
-  const [deletingId, setDeletingId]   = useState(null)
+  const navigate    = useNavigate()
+  const { loadPlan: storeLoadPlan } = usePlanStore()
+
+  const [expandedId,    setExpandedId]    = useState(null)
+  const [deletingId,    setDeletingId]    = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
 
-  function handleExpand(id) {
-    setExpandedId(prev => prev === id ? null : id)
-  }
-
-  function handleLoadToGrocery(plan) {
-    const loaded = loadPlan(plan)
-    savePlanToSession(loaded)
-    navigate('/grocery')
-  }
-
-  function handleLoadToPlanner(plan) {
-    const loaded = loadPlan(plan)
-    savePlanToSession(loaded)
-    navigate('/planner')
-  }
-
-  function handleExportPDF(plan) {
-    const loaded = loadPlan(plan)
-    exportToPDF(loaded, profile?.username || 'Your')
-  }
+  function handleLoadGrocery(plan) { storeLoadPlan(loadPlan(plan)); navigate('/grocery') }
+  function handleLoadPlanner(plan) { storeLoadPlan(loadPlan(plan)); navigate('/planner') }
+  function handlePDF(plan)         { exportToPDF(loadPlan(plan), profile?.username) }
 
   async function handleDelete(plan) {
     setDeletingId(plan.id)
@@ -47,165 +29,134 @@ export default function SavedPage() {
     if (expandedId === plan.id) setExpandedId(null)
   }
 
-  function formatDate(iso) {
-    return new Date(iso).toLocaleDateString('en-US', {
-      weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
-    })
-  }
-
-  function getPlanPreview(plan) {
+  function getPreview(plan) {
     try {
-      const parsed = typeof plan.plan_json === 'string'
-        ? JSON.parse(plan.plan_json)
-        : plan.plan_json
-      // Count unique meals
-      let count = 0
+      const p     = typeof plan.plan_json === 'string' ? JSON.parse(plan.plan_json) : plan.plan_json
       const names = []
-      Object.values(parsed).forEach(day => {
-        Object.values(day).forEach(meal => {
-          count++
-          if (names.length < 3) names.push(meal.item_name)
-        })
-      })
-      return { count, preview: names }
-    } catch {
-      return { count: 0, preview: [] }
-    }
+      let count   = 0
+      Object.values(p).forEach(day => Object.values(day).forEach(meal => {
+        count++
+        if (names.length < 3) names.push(meal.item_name)
+      }))
+      return { count, names }
+    } catch { return { count: 0, names: [] } }
   }
 
-  if (loading) {
-    return (
-      <div className="page-container flex items-center justify-center h-64">
-        <Loader2 className="animate-spin text-sage-400" size={32} />
-      </div>
-    )
-  }
+  if (loading) return (
+    <div className="page-container space-y-4 mt-8">
+      {[...Array(3)].map((_,i) => <div key={i} className="skeleton h-24 rounded-2xl" />)}
+    </div>
+  )
 
   return (
-    <div className="page-container animate-fade-in">
+    <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
+
       {/* Header */}
       <div className="mb-8">
-        <h1 className="section-title">Saved Plans</h1>
-        <p className="text-sage-500 text-sm mt-1">
+        <span className="page-eyebrow">Saved Plans</span>
+        <h1 className="section-title">Your saved weeks</h1>
+        <p style={{ color: 'var(--text-3)', fontSize: '15px', marginTop: '6px' }}>
           {plans.length} {plans.length === 1 ? 'plan' : 'plans'} saved
         </p>
       </div>
 
       {/* Empty state */}
       {plans.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-24 text-center">
-          <div className="w-20 h-20 rounded-3xl bg-sage-100 flex items-center justify-center mb-4">
-            <Bookmark size={36} className="text-sage-400" />
+        <div className="flex flex-col items-center py-28 text-center" style={{ animation: 'fadeIn 0.6s ease' }}>
+          <div className="w-24 h-24 rounded-3xl flex items-center justify-center mb-6"
+            style={{ background: 'linear-gradient(135deg,rgba(31,158,98,0.1),rgba(31,158,98,0.04))', border: '1.5px solid rgba(31,158,98,0.15)', animation: 'float 3s ease-in-out infinite' }}>
+            <Bookmark size={36} style={{ color: 'var(--brand)' }} />
           </div>
-          <h3 className="font-display text-xl text-sage-800 mb-2">No saved plans yet</h3>
-          <p className="text-sage-400 text-sm max-w-xs mb-6">
-            Generate a weekly plan and save it with a name to find it here.
+          <h3 className="font-display font-semibold mb-2.5" style={{ fontSize: '24px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
+            No saved plans yet
+          </h3>
+          <p style={{ color: 'var(--text-3)', fontSize: '15px', maxWidth: '320px', marginBottom: '28px', lineHeight: '1.6' }}>
+            Generate a weekly plan and save it with a name — you'll find it here.
           </p>
-          <button onClick={() => navigate('/planner')} className="btn-primary btn">
-            <CalendarDays size={16} /> Go to Planner
+          <button onClick={() => navigate('/planner')} className="btn-primary btn btn-lg">
+            <Sparkles size={17} /> Generate a plan
           </button>
         </div>
       )}
 
-      {/* Plan list */}
+      {/* Plans */}
       <div className="space-y-4">
         {plans.map((plan, idx) => {
-          const { count, preview } = getPlanPreview(plan)
-          const isExpanded = expandedId === plan.id
-
-          let parsedPlan = null
+          const { count, names } = getPreview(plan)
+          const isExpanded       = expandedId === plan.id
+          let parsed             = null
           if (isExpanded) {
-            try {
-              parsedPlan = typeof plan.plan_json === 'string'
-                ? JSON.parse(plan.plan_json)
-                : plan.plan_json
-            } catch {}
+            try { parsed = typeof plan.plan_json === 'string' ? JSON.parse(plan.plan_json) : plan.plan_json } catch {}
           }
 
           return (
-            <div
-              key={plan.id}
-              className="card overflow-hidden animate-slide-up"
-              style={{ animationDelay: `${idx * 0.05}s` }}
-            >
-              {/* Plan header row */}
-              <div className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+            <div key={plan.id} className="card overflow-hidden"
+              style={{ animation: `slideUp 0.4s cubic-bezier(0.16,1,0.3,1) ${idx * 50}ms both` }}>
+
+              {/* Header row */}
+              <div className="px-6 py-5 flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <Bookmark size={14} className="text-sage-400 shrink-0" />
-                    <h3 className="font-display text-base text-sage-900 truncate">
+                  <div className="flex items-center gap-3 mb-1">
+                    <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+                      style={{ background: 'rgba(31,158,98,0.1)', border: '1px solid rgba(31,158,98,0.2)' }}>
+                      <Bookmark size={15} style={{ color: 'var(--brand)' }} />
+                    </div>
+                    <h3 className="font-display font-semibold truncate" style={{ fontSize: '18px', color: 'var(--text)', letterSpacing: '-0.02em' }}>
                       {plan.name}
                     </h3>
                   </div>
-                  <p className="text-xs text-sage-400 ml-5">
-                    {formatDate(plan.created_at)} · {count} meals
+                  <p style={{ fontSize: '13px', color: 'var(--text-3)', paddingLeft: '44px' }}>
+                    {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    {' · '}{count} meals
+                    {names.length > 0 && ` · ${names.slice(0,2).join(', ')}${count > 2 ? '…' : ''}`}
                   </p>
-                  {preview.length > 0 && (
-                    <p className="text-xs text-sage-400 ml-5 mt-0.5 truncate">
-                      {preview.join(', ')}{count > 3 ? '…' : ''}
-                    </p>
-                  )}
                 </div>
 
-                {/* Actions */}
+                {/* Action buttons */}
                 <div className="flex gap-2 flex-wrap shrink-0">
-                  <button
-                    onClick={() => handleExpand(plan.id)}
-                    className="btn-secondary btn-sm btn"
-                  >
-                    <Eye size={13} />
+                  <button onClick={() => setExpandedId(isExpanded ? null : plan.id)} className="btn-secondary btn-sm btn gap-2">
+                    {isExpanded ? <EyeOff size={14} /> : <Eye size={14} />}
                     {isExpanded ? 'Collapse' : 'View'}
                   </button>
-                  <button
-                    onClick={() => handleLoadToGrocery(plan)}
-                    className="btn-secondary btn-sm btn"
-                  >
-                    <ShoppingCart size={13} /> Grocery
+                  <button onClick={() => handleLoadGrocery(plan)} className="btn-secondary btn-sm btn gap-2">
+                    <ShoppingCart size={14} /> Grocery
                   </button>
-                  <button
-                    onClick={() => handleExportPDF(plan)}
-                    className="btn-secondary btn-sm btn"
-                  >
-                    <Download size={13} /> PDF
+                  <button onClick={() => handlePDF(plan)} className="btn-secondary btn-sm btn gap-2">
+                    <Download size={14} /> PDF
                   </button>
-                  <button
-                    onClick={() => setConfirmDelete(plan)}
-                    className="btn-danger btn-sm btn"
-                    disabled={deletingId === plan.id}
-                  >
-                    {deletingId === plan.id
-                      ? <Loader2 size={13} className="animate-spin" />
-                      : <Trash2 size={13} />}
+                  <button onClick={() => setConfirmDelete(plan)} disabled={deletingId === plan.id}
+                    className="btn-danger btn-sm btn">
+                    {deletingId === plan.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   </button>
                 </div>
               </div>
 
-              {/* Expanded plan view */}
-              {isExpanded && parsedPlan && (
-                <div className="border-t border-cream-100 px-5 py-4 animate-slide-up">
-                  <div className="overflow-x-auto -mx-1">
-                    <table className="w-full text-xs min-w-[480px]">
+              {/* Expanded table */}
+              {isExpanded && parsed && (
+                <div className="px-6 pb-6" style={{ borderTop: '1px solid var(--border)', animation: 'slideDown 0.25s ease both' }}>
+                  <div className="overflow-x-auto mt-4">
+                    <table className="w-full" style={{ minWidth: '520px' }}>
                       <thead>
                         <tr>
-                          <th className="text-left pb-2 pr-3 font-semibold text-sage-500 w-24">Day</th>
+                          <th className="text-left pr-4 pb-3 w-24" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-3)' }}>Day</th>
                           {CATEGORIES.map(cat => (
-                            <th key={cat} className="text-left pb-2 pr-3 font-semibold text-sage-500">
+                            <th key={cat} className="text-left pr-4 pb-3" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-3)' }}>
                               {CATEGORY_ICONS[cat]} {cat}
                             </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {DAYS.map((day, dayIdx) => (
-                          <tr key={day} className="border-t border-cream-50">
-                            <td className="py-2 pr-3 font-medium text-sage-700 align-top pt-3">
+                        {DAYS.map((day, di) => (
+                          <tr key={day} style={{ borderTop: '1px solid var(--border)' }}>
+                            <td className="py-3 pr-4 font-semibold" style={{ fontSize: '13px', color: 'var(--text-2)' }}>
                               {day.slice(0, 3)}
                             </td>
                             {CATEGORIES.map(cat => {
-                              const meal = parsedPlan[dayIdx]?.[cat]
+                              const meal = parsed[di]?.[cat]
                               return (
-                                <td key={cat} className="py-2 pr-3 align-top pt-3 text-sage-600 leading-relaxed">
-                                  {meal ? meal.item_name : <span className="text-sage-300">—</span>}
+                                <td key={cat} className="py-3 pr-4" style={{ fontSize: '13px', color: 'var(--text)' }}>
+                                  {meal ? meal.item_name : <span style={{ color: 'var(--border)' }}>—</span>}
                                 </td>
                               )
                             })}
@@ -215,18 +166,12 @@ export default function SavedPage() {
                     </table>
                   </div>
 
-                  <div className="flex gap-2 mt-4 pt-4 border-t border-cream-100">
-                    <button
-                      onClick={() => handleLoadToPlanner(plan)}
-                      className="btn-primary btn-sm btn"
-                    >
-                      <CalendarDays size={13} /> Load into Planner
+                  <div className="flex gap-3 mt-5">
+                    <button onClick={() => handleLoadPlanner(plan)} className="btn-primary btn">
+                      <CalendarDays size={16} /> Load into Planner
                     </button>
-                    <button
-                      onClick={() => handleLoadToGrocery(plan)}
-                      className="btn-secondary btn-sm btn"
-                    >
-                      <ShoppingCart size={13} /> View Grocery List
+                    <button onClick={() => handleLoadGrocery(plan)} className="btn-secondary btn">
+                      <ShoppingCart size={16} /> View Grocery List
                     </button>
                   </div>
                 </div>
@@ -238,28 +183,23 @@ export default function SavedPage() {
 
       {/* Delete confirm modal */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-sm card p-6 animate-scale-in text-center">
-            <div className="w-12 h-12 rounded-full bg-clay-100 flex items-center justify-center mx-auto mb-3">
-              <Trash2 size={20} className="text-clay-500" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}>
+          <div className="w-full max-w-sm card p-7 text-center" style={{ animation: 'scaleIn 0.2s ease' }}>
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
+              style={{ background: 'rgba(212,80,42,0.1)', border: '1.5px solid rgba(212,80,42,0.2)', fontSize: '26px' }}>
+              🗑
             </div>
-            <h3 className="font-display text-lg text-sage-900 mb-1">Delete plan?</h3>
-            <p className="text-sm text-sage-500 mb-5">
-              "<strong>{confirmDelete.name}</strong>" will be permanently removed.
+            <h3 className="font-display font-semibold mb-2" style={{ fontSize: '20px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
+              Delete this plan?
+            </h3>
+            <p style={{ fontSize: '14px', color: 'var(--text-3)', marginBottom: '24px', lineHeight: '1.6' }}>
+              "<strong style={{ color: 'var(--text)' }}>{confirmDelete.name}</strong>" will be gone forever.
             </p>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setConfirmDelete(null)}
-                className="btn-secondary btn flex-1"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(confirmDelete)}
-                className="btn-danger btn flex-1"
-                disabled={!!deletingId}
-              >
-                {deletingId ? <Loader2 size={16} className="animate-spin" /> : 'Delete'}
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(null)} className="btn-secondary btn flex-1">Keep it</button>
+              <button onClick={() => handleDelete(confirmDelete)} disabled={!!deletingId} className="btn-danger btn flex-1">
+                {deletingId ? <Loader2 size={15} className="animate-spin" /> : 'Delete'}
               </button>
             </div>
           </div>

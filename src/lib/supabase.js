@@ -3,17 +3,27 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl  = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey  = import.meta.env.VITE_SUPABASE_ANON_KEY
 
+// Log clearly so the developer can see in the console what's missing
 if (!supabaseUrl || !supabaseKey) {
-  throw new Error(
-    '⚠️  Missing Supabase env vars.\n' +
-    'Copy .env.example → .env.local and fill in your project URL and anon key.'
+  console.error(
+    '⚠️  Supabase env vars missing!\n' +
+    'Make sure .env.local exists in the project root and contains:\n' +
+    '  VITE_SUPABASE_URL=https://your-project.supabase.co\n' +
+    '  VITE_SUPABASE_ANON_KEY=eyJ...\n\n' +
+    `Current values:\n  URL: ${supabaseUrl || '❌ MISSING'}\n  KEY: ${supabaseKey ? '✅ present' : '❌ MISSING'}`
   )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-  },
-})
+export const supabase = createClient(
+  supabaseUrl  || 'https://placeholder.supabase.co',
+  supabaseKey  || 'placeholder-key',
+  {
+    auth: {
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+  }
+)
+
+export const isMisconfigured = !supabaseUrl || !supabaseKey

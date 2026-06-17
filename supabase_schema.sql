@@ -151,3 +151,86 @@ CREATE INDEX IF NOT EXISTS saved_plans_user_idx   ON public.saved_plans(user_id)
 -- ─────────────────────────────────────────
 -- DONE ✅
 -- ─────────────────────────────────────────
+
+
+-- ============================================================
+-- SCHEMA UPDATE: Household Accounts (#20)
+-- Run this block in Supabase SQL Editor after the initial schema
+-- ============================================================
+
+-- Households table
+CREATE TABLE IF NOT EXISTS public.households (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT NOT NULL,
+  owner_id    UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  invite_code TEXT UNIQUE NOT NULL DEFAULT UPPER(SUBSTRING(gen_random_uuid()::text, 1, 8)),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Household members
+CREATE TABLE IF NOT EXISTS public.household_members (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES public.households(id) ON DELETE CASCADE,
+  user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  role         TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner','member')),
+  joined_at    TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(household_id, user_id)
+);
+
+-- Shared plans (tied to household, not individual user)
+CREATE TABLE IF NOT EXISTS public.shared_plans (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  household_id UUID NOT NULL REFERENCES public.households(id) ON DELETE CASCADE,
+  created_by   UUID NOT NULL REFERENCES auth.users(id),
+  name         TEXT NOT NULL,
+  plan_json    JSONB NOT NULL,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS
+ALTER TABLE public.households        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.household_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shared_plans      ENABLE ROW LEVEL SECURITY;
+
+-- Households: members can read, owner can update/delete
+CREATE POLICY "household_member_read" ON public.households
+  FOR SELECT USING (
+    id IN (SELECT household_id FROM public.household_members WHERE user_id = auth.uid())
+    OR owner_id = auth.uid()
+  );
+CREATE POLICY "household_owner_insert" ON public.households
+  FOR INSERT WITH CHECK (auth.uid() = owner_id);
+CREATE POLICY "household_owner_update" ON public.households
+  FOR UPDATE USING (auth.uid() = owner_id);
+CREATE POLICY "household_owner_delete" ON public.households
+  FOR DELETE USING (auth.uid() = owner_id);
+
+-- Members
+CREATE POLICY "members_read" ON public.household_members
+  FOR SELECT USING (user_id = auth.uid() OR
+    household_id IN (SELECT id FROM public.households WHERE owner_id = auth.uid()));
+CREATE POLICY "members_insert" ON public.household_members
+  FOR INSERT WITH CHECK (
+    household_id IN (SELECT id FROM public.households WHERE owner_id = auth.uid())
+    OR user_id = auth.uid()
+  );
+CREATE POLICY "members_delete" ON public.household_members
+  FOR DELETE USING (user_id = auth.uid() OR
+    household_id IN (SELECT id FROM public.households WHERE owner_id = auth.uid()));
+
+-- Shared plans: all household members can read, members can insert
+CREATE POLICY "shared_plans_read" ON public.shared_plans
+  FOR SELECT USING (
+    household_id IN (SELECT household_id FROM public.household_members WHERE user_id = auth.uid())
+  );
+CREATE POLICY "shared_plans_insert" ON public.shared_plans
+  FOR INSERT WITH CHECK (
+    auth.uid() = created_by AND
+    household_id IN (SELECT household_id FROM public.household_members WHERE user_id = auth.uid())
+  );
+CREATE POLICY "shared_plans_delete" ON public.shared_plans
+  FOR DELETE USING (auth.uid() = created_by);
+
+CREATE INDEX IF NOT EXISTS household_members_user_idx ON public.household_members(user_id);
+CREATE INDEX IF NOT EXISTS household_members_hh_idx   ON public.household_members(household_id);
+CREATE INDEX IF NOT EXISTS shared_plans_hh_idx        ON public.shared_plans(household_id);

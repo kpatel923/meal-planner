@@ -156,54 +156,81 @@ export function groupGroceryByCategory(groceryMap) {
 }
 
 // Rough quantity estimates based on how many meals use an ingredient
-export function estimateQuantity(ingredient, mealCount) {
+// Recipes are written assuming a base of 2 servings. `servings` lets the
+// grocery list scale up or down — we fold it into an "effective" meal count
+// so all the existing tier thresholds below scale proportionally.
+export function estimateQuantity(ingredient, mealCount, servings = 2) {
   const lower = ingredient.toLowerCase()
+  const scale = Math.max(servings, 1) / 2
+  const effective = mealCount * scale
 
   // Eggs
   if (lower.includes('egg') && !lower.includes('eggplant')) {
-    return mealCount <= 2 ? '4 eggs' : mealCount <= 4 ? '6–8 eggs' : '12 eggs (1 dozen)'
+    const count = Math.ceil(effective * 2)
+    return `${count} egg${count !== 1 ? 's' : ''}`
   }
   // Bread / tortillas
-  if (lower.includes('bread')) return mealCount <= 2 ? '½ loaf' : '1 loaf'
-  if (lower.includes('tortilla')) return mealCount <= 2 ? '4–6 tortillas' : '8–10 tortillas'
+  if (lower.includes('bread')) return effective <= 2 ? '½ loaf' : effective <= 5 ? '1 loaf' : '2 loaves'
+  if (lower.includes('tortilla')) {
+    const count = Math.ceil(effective * 3)
+    return `${count} tortillas`
+  }
   // Milk / almond milk
-  if (lower.includes('milk')) return mealCount <= 2 ? '1 cup' : '1 quart'
+  if (lower.includes('milk')) return effective <= 2 ? '1 cup' : effective <= 5 ? '1 quart' : '½ gallon'
   // Oats
-  if (lower.includes('oat')) return mealCount <= 2 ? '1 cup' : '2–3 cups'
+  if (lower.includes('oat')) return `${Math.ceil(effective)} cup${effective > 1 ? 's' : ''}`
   // Rice
-  if (lower === 'rice' || lower.includes('rice')) return mealCount <= 2 ? '1 cup dry' : '2 cups dry'
+  if (lower === 'rice' || lower.includes('rice')) return `${Math.ceil(effective)} cup${effective > 1 ? 's' : ''} dry`
   // Pasta
-  if (lower.includes('pasta')) return mealCount <= 2 ? '8 oz' : '1 lb'
+  if (lower.includes('pasta')) return effective <= 2 ? '8 oz' : effective <= 5 ? '1 lb' : '2 lbs'
   // Chicken
-  if (lower.includes('chicken') && !lower.includes('sausage')) return mealCount <= 2 ? '1 lb' : '2 lbs'
+  if (lower.includes('chicken') && !lower.includes('sausage')) {
+    const lbs = Math.max(1, Math.ceil(effective))
+    return `${lbs} lb${lbs > 1 ? 's' : ''}`
+  }
   // Salmon / fish
-  if (lower.includes('salmon') || lower.includes('fish')) return mealCount <= 2 ? '2 fillets' : '4 fillets'
+  if (lower.includes('salmon') || lower.includes('fish')) {
+    const fillets = Math.max(servings, mealCount)
+    return `${fillets} fillet${fillets > 1 ? 's' : ''}`
+  }
   // Butter
-  if (lower === 'butter' || lower.includes('butter')) return '1 stick (½ cup)'
+  if (lower === 'butter' || lower.includes('butter')) return effective <= 4 ? '1 stick (½ cup)' : '2 sticks (1 cup)'
   // Olive oil
   if (lower.includes('olive oil') || lower.includes('oil')) return 'as needed'
   // Garlic
-  if (lower === 'garlic') return mealCount <= 2 ? '1 bulb' : '2 bulbs'
+  if (lower === 'garlic') return effective <= 3 ? '1 bulb' : '2 bulbs'
   // Onion
-  if (lower === 'onion') return mealCount <= 2 ? '1 onion' : '2–3 onions'
+  if (lower === 'onion') {
+    const count = Math.max(1, Math.ceil(effective))
+    return `${count} onion${count > 1 ? 's' : ''}`
+  }
   // Avocado
-  if (lower.includes('avocado')) return mealCount <= 2 ? '1 avocado' : `${mealCount} avocados`
+  if (lower.includes('avocado')) {
+    const count = Math.max(1, Math.ceil(effective))
+    return `${count} avocado${count > 1 ? 's' : ''}`
+  }
   // Banana
-  if (lower.includes('banana')) return mealCount <= 2 ? '2 bananas' : '1 bunch'
+  if (lower.includes('banana')) return effective <= 3 ? `${Math.max(2, Math.ceil(effective))} bananas` : '1 bunch'
   // Berries
   if (lower.includes('berries') || lower.includes('blueberries') || lower.includes('strawberries')) {
-    return mealCount <= 2 ? '1 cup' : '1 pint'
+    return effective <= 2 ? '1 cup' : effective <= 5 ? '1 pint' : '1 quart'
   }
   // Yogurt
-  if (lower.includes('yogurt')) return mealCount <= 2 ? '1 cup' : '32 oz container'
+  if (lower.includes('yogurt')) return effective <= 2 ? '1 cup' : '32 oz container'
   // Cheese
-  if (lower.includes('cheese')) return mealCount <= 2 ? '4 oz' : '8 oz block'
+  if (lower.includes('cheese')) return effective <= 2 ? '4 oz' : effective <= 5 ? '8 oz block' : '1 lb block'
   // Spinach
-  if (lower.includes('spinach')) return mealCount <= 2 ? '2 cups' : '5 oz bag'
+  if (lower.includes('spinach')) return effective <= 2 ? '2 cups' : '5 oz bag'
   // Tomato
-  if (lower === 'tomato' || lower.includes('tomato')) return mealCount <= 2 ? '2 tomatoes' : '4 tomatoes'
+  if (lower === 'tomato' || lower.includes('tomato')) {
+    const count = Math.max(1, Math.ceil(effective))
+    return `${count} tomato${count > 1 ? 'es' : ''}`
+  }
   // Lemon / lime
-  if (lower.includes('lemon') || lower.includes('lime')) return `${Math.min(mealCount, 4)} ${lower.includes('lemon') ? 'lemons' : 'limes'}`
+  if (lower.includes('lemon') || lower.includes('lime')) {
+    const count = Math.max(1, Math.ceil(effective))
+    return `${count} ${lower.includes('lemon') ? 'lemons' : 'limes'}`
+  }
   // Salt, pepper, spices
   if (['salt','pepper','cumin','turmeric','cinnamon','paprika','oregano'].some(s => lower.includes(s))) {
     return 'pantry staple'
@@ -212,7 +239,8 @@ export function estimateQuantity(ingredient, mealCount) {
   if (lower.includes('honey') || lower.includes('maple syrup')) return 'to taste'
   // Beans / chickpeas
   if (lower.includes('bean') || lower.includes('chickpea') || lower.includes('lentil')) {
-    return mealCount <= 2 ? '1 can (15 oz)' : '2 cans'
+    const cans = Math.max(1, Math.ceil(effective))
+    return `${cans} can${cans > 1 ? 's' : ''} (15 oz)`
   }
 
   // Default: just show count

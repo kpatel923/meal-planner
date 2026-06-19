@@ -50,7 +50,7 @@ const CAT_COLORS = {
 export default function GroceryPage() {
   const navigate  = useNavigate()
   const { plans, loadPlan: loadSavedPlan } = usePlans()
-  const { weeklyPlan, loadPlan: storeLoadPlan } = usePlanStore()
+  const { weeklyPlan, servings, loadPlan: storeLoadPlan } = usePlanStore()
 
   const [checked,         setChecked]         = useState({})
   const [showMeals,       setShowMeals]       = useState(false)
@@ -95,7 +95,7 @@ export default function GroceryPage() {
       if (!items || !Object.keys(items).length) continue
       lines.push(`\n── ${cat} ──`)
       Object.keys(items).sort().forEach(ing => {
-        const qty = estimateQuantity(ing, (groceryMap[ing] || []).length)
+        const qty = estimateQuantity(ing, (groceryMap[ing] || []).length, servings)
         lines.push(`${checked[ing] ? '[x]' : '[ ]'} ${ing.charAt(0).toUpperCase() + ing.slice(1)}${qty ? `  (${qty})` : ''}`)
       })
     }
@@ -161,16 +161,21 @@ export default function GroceryPage() {
         <div>
           <span className="page-eyebrow">Grocery List</span>
           <h1 className="section-title">What to buy</h1>
-          <p style={{ color: 'var(--text-3)', fontSize: '15px', marginTop: '6px' }}>
-            {checkedCount} of {allIngreds.length} items · {Object.keys(grouped).length} categories
-          </p>
+          <div className="flex items-center gap-2 flex-wrap mt-2">
+            <p style={{ color: 'var(--text-3)', fontSize: '15px' }}>
+              {checkedCount} of {allIngreds.length} items · {Object.keys(grouped).length} categories
+            </p>
+            <span className="badge flex items-center gap-1" style={{ background: 'rgba(31,158,98,0.1)', color: 'var(--brand)', border: '1px solid rgba(31,158,98,0.2)', fontSize: '11px' }}>
+              👥 {servings} {servings === 1 ? 'person' : 'people'}
+            </span>
+          </div>
         </div>
         <div className="flex gap-2.5 flex-wrap">
-          <button onClick={handleShare} disabled={sharing} className="btn-secondary btn gap-2">
+          <button onClick={handleShare} disabled={sharing} className="btn-secondary btn gap-2 tap-target">
             {sharing ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Share2 size={16} />}
             Share list
           </button>
-          <button onClick={exportTxt} className="btn-secondary btn gap-2">
+          <button onClick={exportTxt} className="btn-secondary btn gap-2 tap-target">
             <Download size={16} /> Export
           </button>
         </div>
@@ -274,7 +279,7 @@ export default function GroceryPage() {
               {!isCollapsed && catIngreds.map((ing, idx) => {
                 const done    = !!checked[ing]
                 const meals   = groceryMap[ing] || []
-                const qty     = estimateQuantity(ing, meals.length)
+                const qty     = estimateQuantity(ing, meals.length, servings)
 
                 return (
                   <button key={ing} onClick={() => toggle(ing)}

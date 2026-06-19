@@ -234,3 +234,44 @@ CREATE POLICY "shared_plans_delete" ON public.shared_plans
 CREATE INDEX IF NOT EXISTS household_members_user_idx ON public.household_members(user_id);
 CREATE INDEX IF NOT EXISTS household_members_hh_idx   ON public.household_members(household_id);
 CREATE INDEX IF NOT EXISTS shared_plans_hh_idx        ON public.shared_plans(household_id);
+
+
+-- ============================================================
+-- SCHEMA UPDATE: Recipe Links + People Count + Detail Notes
+-- Run this block in Supabase SQL Editor after the household block
+-- ============================================================
+
+-- Split the old single 'notes' field into purpose-specific columns.
+-- 'notes' is kept for backward compatibility — existing video links
+-- that were stored there are preserved and migrated below.
+
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS video_url    TEXT;
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS written_url  TEXT;
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS detail_notes TEXT;
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS source       TEXT DEFAULT 'manual'
+  CHECK (source IN ('manual','ai','import','seed'));
+
+-- Migrate existing data: anything in the old 'notes' field that looks
+-- like a video URL (youtube/instagram/tiktok) moves to video_url,
+-- anything else moves to written_url. Safe to run multiple times.
+UPDATE public.meals
+SET video_url = notes
+WHERE notes IS NOT NULL
+  AND video_url IS NULL
+  AND (notes ILIKE '%youtube%' OR notes ILIKE '%youtu.be%' OR notes ILIKE '%instagram%' OR notes ILIKE '%tiktok%');
+
+UPDATE public.meals
+SET written_url = notes
+WHERE notes IS NOT NULL
+  AND written_url IS NULL
+  AND video_url IS NULL
+  AND notes ILIKE 'http%';
+
+-- People count / household size preference, used to scale grocery quantities
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS default_servings INTEGER DEFAULT 2 CHECK (default_servings BETWEEN 1 AND 20);
+
+-- Per-saved-plan serving size, so a plan remembers how many people it was generated for
+ALTER TABLE public.saved_plans ADD COLUMN IF NOT EXISTS servings INTEGER DEFAULT 2;
+ALTER TABLE public.shared_plans ADD COLUMN IF NOT EXISTS servings INTEGER DEFAULT 2;
+
+CREATE INDEX IF NOT EXISTS meals_source_idx ON public.meals(source);

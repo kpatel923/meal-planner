@@ -2,16 +2,34 @@ import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { buildWeeklyPlan } from '../lib/mealLogic'
 
 const PlanContext = createContext(null)
+const SERVINGS_KEY = 'mealplan_servings'
+
+function loadStoredServings() {
+  try {
+    const stored = localStorage.getItem(SERVINGS_KEY)
+    const n = parseInt(stored, 10)
+    return (n >= 1 && n <= 20) ? n : 2
+  } catch { return 2 }
+}
 
 export function PlanProvider({ children }) {
   const [weeklyPlan,   setWeeklyPlan]   = useState(null)
   const [dietTypes,    setDietTypes]    = useState(['veg','vegan','nonveg'])
+  const [servings,     setServingsRaw]  = useState(loadStoredServings)
   const [generating,   setGenerating]   = useState(false)
   const [expandedDay,  setExpandedDay]  = useState(null)
   const [prepChecked,  setPrepChecked]  = useState({})   // { "0-Breakfast": true }
   const [undoStack,    setUndoStack]    = useState([])   // for undo swap
   const [planDesc,     setPlanDesc]     = useState(null) // AI description
   const undoTimerRef = useRef(null)
+
+  // Persist servings choice across sessions — this is a "how many people
+  // am I usually cooking for" preference, not tied to any one plan
+  const setServings = useCallback((n) => {
+    const clamped = Math.min(20, Math.max(1, n))
+    setServingsRaw(clamped)
+    try { localStorage.setItem(SERVINGS_KEY, String(clamped)) } catch {}
+  }, [])
 
   function persistPlan(plan) {
     try { sessionStorage.setItem('mealplan_current', JSON.stringify(plan)) } catch {}
@@ -130,9 +148,9 @@ export function PlanProvider({ children }) {
 
   return (
     <PlanContext.Provider value={{
-      weeklyPlan, generating, dietTypes, expandedDay,
+      weeklyPlan, generating, dietTypes, expandedDay, servings,
       prepChecked, undoStack, planDesc,
-      setDietTypes, setExpandedDay, setPlanDesc,
+      setDietTypes, setExpandedDay, setPlanDesc, setServings,
       generate, regenerateDay, swapMeal, undoSwap, clearUndo,
       loadPlan, clearPlan, togglePrep, isPrepDone, prepProgress,
     }}>

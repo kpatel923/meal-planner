@@ -50,9 +50,10 @@
   .btn {
     @apply inline-flex items-center justify-center gap-2 font-body font-semibold
            select-none cursor-pointer disabled:opacity-40 disabled:pointer-events-none;
-    font-size: 14px;
-    padding: 10px 20px;
-    border-radius: 12px;
+    font-size: 14.5px;
+    padding: 12px 22px;
+    min-height: 44px;
+    border-radius: 13px;
     letter-spacing: -0.01em;
     transition: all 0.18s cubic-bezier(0.16,1,0.3,1);
   }
@@ -74,15 +75,15 @@
   .btn-secondary:hover  { background: var(--surface-2); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
   .btn-secondary:active { transform: scale(0.97); }
 
-  .btn-ghost { @apply btn; color: var(--text-2); background: transparent; }
+  .btn-ghost { @apply btn; color: var(--text-2); background: transparent; min-height: 40px; }
   .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
 
   .btn-danger { @apply btn; color: #D4502A; background: transparent; border: 1.5px solid rgba(212,80,42,0.2); }
   .btn-danger:hover { background: rgba(212,80,42,0.08); border-color: rgba(212,80,42,0.4); }
 
-  .btn-lg  { font-size: 16px !important; padding: 14px 28px !important; border-radius: 14px !important; }
-  .btn-sm  { font-size: 13px !important; padding: 7px 14px !important; border-radius: 10px !important; }
-  .btn-icon { padding: 9px !important; border-radius: 10px !important; }
+  .btn-lg  { font-size: 16.5px !important; padding: 15px 30px !important; min-height: 52px !important; border-radius: 15px !important; }
+  .btn-sm  { font-size: 13px !important; padding: 8px 16px !important; min-height: 38px !important; border-radius: 10px !important; }
+  .btn-icon { padding: 10px !important; min-height: 44px !important; min-width: 44px !important; border-radius: 11px !important; }
 
   /* ── CARDS ───────────────────────────────────────────── */
   .card {
@@ -108,8 +109,9 @@
   /* ── INPUTS ──────────────────────────────────────────── */
   .input {
     @apply w-full font-body rounded-xl;
-    font-size: 15px;
-    padding: 11px 15px;
+    font-size: 15.5px;
+    padding: 13px 16px;
+    min-height: 48px;
     background: var(--surface);
     border: 1.5px solid var(--border);
     color: var(--text);
@@ -121,9 +123,9 @@
 
   .input-label {
     display: block;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
-    margin-bottom: 6px;
+    margin-bottom: 7px;
     text-transform: uppercase;
     letter-spacing: 0.09em;
     color: var(--text-3);
@@ -139,7 +141,8 @@
   }
 
   /* ── PAGE ────────────────────────────────────────────── */
-  .page-container { @apply mx-auto px-5 sm:px-8 lg:px-12 py-8 sm:py-10; max-width: 1140px; }
+  .page-container { @apply mx-auto px-6 sm:px-10 lg:px-16 xl:px-20 py-8 sm:py-10; max-width: 1600px; }
+  .page-container-narrow { @apply mx-auto px-6 sm:px-10 py-8 sm:py-10; max-width: 880px; }
 
   .section-title {
     @apply font-display font-semibold leading-none;
@@ -216,6 +219,126 @@
     border-radius: 18px;
     overflow: visible;
   }
+
+  /* ── MODAL / SHEET ───────────────────────────────────── */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  @media (max-width: 640px) {
+    .modal-backdrop { align-items: flex-end; padding: 0; }
+  }
+
+  .modal-panel {
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: 24px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.25);
+    max-width: 640px;
+    width: 100%;
+    max-height: 88vh;
+    overflow-y: auto;
+    animation: modalIn 0.28s cubic-bezier(0.16,1,0.3,1);
+  }
+  @media (max-width: 640px) {
+    .modal-panel {
+      border-radius: 24px 24px 0 0;
+      max-height: 92vh;
+      animation: sheetIn 0.32s cubic-bezier(0.16,1,0.3,1);
+    }
+  }
+
+  /* ── LARGER TOUCH TARGETS (mobile mis-click prevention) ── */
+  .tap-target {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* ── STEPPER (people count) ─────────────────────────── */
+  .stepper {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-2);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .stepper-btn {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-2);
+    background: transparent;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+  }
+  .stepper-btn:hover { background: rgba(31,158,98,0.1); color: var(--brand); }
+  .stepper-btn:active { transform: scale(0.92); }
+  .stepper-value {
+    min-width: 48px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 16px;
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ── SEGMENTED CONTROL ───────────────────────────────── */
+  .segmented {
+    display: inline-flex;
+    background: var(--surface-2);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .segmented-option {
+    padding: 9px 16px;
+    border-radius: 11px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-3);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+  }
+  .segmented-option.active {
+    background: var(--surface);
+    color: var(--brand);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+
+  /* ── LARGER CARD GRID (more breathing room) ──────────── */
+  .recipe-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 20px;
+  }
+  @media (min-width: 640px)  { .recipe-grid { grid-template-columns: repeat(2, 1fr); gap: 22px; } }
+  @media (min-width: 1024px) { .recipe-grid { grid-template-columns: repeat(3, 1fr); gap: 24px; } }
+  @media (min-width: 1440px) { .recipe-grid { grid-template-columns: repeat(4, 1fr); gap: 24px; } }
+}
+
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.95) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes sheetIn {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 @layer utilities {

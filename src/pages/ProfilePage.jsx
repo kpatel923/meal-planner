@@ -3,8 +3,9 @@ import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useMeals } from '../hooks/useMeals'
 import { usePlans } from '../hooks/usePlans'
+import { usePlanStore } from '../hooks/usePlanStore'
 import { exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
-import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar } from 'lucide-react'
+import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
@@ -19,13 +20,16 @@ export default function ProfilePage() {
   const { isDark, toggle } = useTheme()
   const { meals }  = useMeals()
   const { plans }  = usePlans()
+  const { servings: liveServings, setServings: setLiveServings } = usePlanStore()
   const navigate   = useNavigate()
 
-  const [editingName, setEditingName] = useState(false)
-  const [nameValue,   setNameValue]   = useState(profile?.username || '')
-  const [savingName,  setSavingName]  = useState(false)
-  const [savingPrefs, setSavingPrefs] = useState(false)
-  const [dietPrefs,   setDietPrefs]   = useState(profile?.diet_prefs || ['veg','vegan','nonveg'])
+  const [editingName,  setEditingName]  = useState(false)
+  const [nameValue,    setNameValue]    = useState(profile?.username || '')
+  const [savingName,   setSavingName]   = useState(false)
+  const [savingPrefs,  setSavingPrefs]  = useState(false)
+  const [savingServ,   setSavingServ]   = useState(false)
+  const [dietPrefs,    setDietPrefs]    = useState(profile?.diet_prefs || ['veg','vegan','nonveg'])
+  const [servings,     setServingsLocal] = useState(profile?.default_servings || liveServings || 2)
 
   const initials = (profile?.username || user?.email || 'U').charAt(0).toUpperCase()
   const joinDate = user?.created_at
@@ -48,6 +52,22 @@ export default function ProfilePage() {
     if (error) toast.error('Could not save preferences')
     else toast.success('Preferences saved!')
     setSavingPrefs(false)
+  }
+
+  function adjustServings(n) {
+    setServingsLocal(p => Math.min(20, Math.max(1, p + n)))
+  }
+
+  async function handleSaveServings() {
+    setSavingServ(true)
+    const { error } = await updateProfile({ default_servings: servings })
+    if (error) {
+      toast.error('Could not save household size')
+    } else {
+      setLiveServings(servings) // sync immediately into the active planner session
+      toast.success('Household size saved!')
+    }
+    setSavingServ(false)
   }
 
   function toggleDiet(key) {
@@ -171,9 +191,33 @@ export default function ProfilePage() {
             )
           })}
         </div>
-        <button onClick={handleSavePrefs} disabled={savingPrefs} className="btn-primary btn">
+        <button onClick={handleSavePrefs} disabled={savingPrefs} className="btn-primary btn tap-target">
           {savingPrefs ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
           Save preferences
+        </button>
+      </div>
+
+      {/* ── Household size ───────────────────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.17s both' }}>
+        <h3 className="font-semibold mb-1 flex items-center gap-2" style={{ fontSize: '16px', color: 'var(--text)' }}>
+          <Users size={16} style={{ color: 'var(--brand)' }} /> Household size
+        </h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '20px' }}>
+          How many people you're usually cooking for — scales grocery quantities and portion sizes automatically.
+        </p>
+        <div className="flex items-center gap-4 mb-5">
+          <div className="stepper">
+            <button onClick={() => adjustServings(-1)} disabled={servings <= 1} className="stepper-btn" style={{ opacity: servings <= 1 ? 0.3 : 1 }}>−</button>
+            <span className="stepper-value">{servings}</span>
+            <button onClick={() => adjustServings(1)} disabled={servings >= 20} className="stepper-btn" style={{ opacity: servings >= 20 ? 0.3 : 1 }}>+</button>
+          </div>
+          <span style={{ fontSize: '14px', color: 'var(--text-2)' }}>
+            {servings === 1 ? 'Just me' : `${servings} people`}
+          </span>
+        </div>
+        <button onClick={handleSaveServings} disabled={savingServ} className="btn-primary btn tap-target">
+          {savingServ ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Save household size
         </button>
       </div>
 

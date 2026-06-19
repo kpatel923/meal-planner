@@ -13,7 +13,7 @@ import {
   Download, Save, ChevronDown, ChevronUp, Loader2, Sparkles,
   AlertCircle, X, ArrowLeftRight, RotateCcw, Play, Camera,
   ExternalLink, RefreshCw, CheckCircle2, Circle, Share2,
-  Link, Undo2, Wand2, ChefHat
+  Link, Undo2, Wand2, ChefHat, Users
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -41,20 +41,22 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
   const [flipped, setFlipped] = useState(false)
   const style   = CAT_STYLES[category]
   const diet    = meal ? DIET_LABELS[meal.diet_type] : null
-  const link    = meal?.notes && (meal.notes.startsWith('http') || meal.notes.startsWith('www'))
-    ? getLinkMeta(meal.notes) : null
+  const videoLink = meal?.video_url ? getLinkMeta(meal.video_url) : null
+  const hasWritten = !!meal?.written_url
+  const hasAnyLink = videoLink || hasWritten
   const prepped = isPrepDone
+  const cardHeight = hasAnyLink ? '212px' : '196px'
 
   return (
-    <div className="flip-card-outer" style={{ height: '196px', marginTop: '10px' }}>
+    <div className="flip-card-outer" style={{ height: cardHeight, marginTop: '10px' }}>
       <div className={`flip-card-wrapper ${flipped ? 'flipped' : ''}`}
-        style={{ height: '196px' }}
+        style={{ height: cardHeight }}
         onClick={() => meal && setFlipped(f => !f)}>
-        <div className="flip-card-inner" style={{ height: '196px' }}>
+        <div className="flip-card-inner" style={{ height: cardHeight }}>
 
           {/* ── FRONT ── */}
           <div className={`flip-card-front rounded-2xl border p-4 flex flex-col ${isDark ? style.dark : style.light}`}
-            style={{ height:'196px', opacity: prepped ? 0.6 : 1, transition: 'opacity 0.3s ease' }}>
+            style={{ height: cardHeight, opacity: prepped ? 0.6 : 1, transition: 'opacity 0.3s ease' }}>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-1.5">
                 <span style={{ fontSize:'15px' }}>{style.icon}</span>
@@ -69,8 +71,8 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
                 )}
               </div>
               <button onClick={e => { e.stopPropagation(); onSwap() }}
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-white transition-all hover:opacity-90 active:scale-95"
-                style={{ fontSize:'11px', background:style.accent, fontWeight:700 }}>
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-white transition-all hover:opacity-90 active:scale-95 tap-target"
+                style={{ fontSize:'11px', background:style.accent, fontWeight:700, minHeight:'30px' }}>
                 <ArrowLeftRight size={10} /> Swap
               </button>
             </div>
@@ -94,8 +96,8 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
                     )}
                     {/* Prep toggle */}
                     <button onClick={e => { e.stopPropagation(); onTogglePrep() }}
-                      className="flex items-center gap-1 transition-all hover:opacity-80 active:scale-95"
-                      style={{ fontSize:'10px', color: prepped ? style.accent : 'var(--text-3)', fontWeight:600 }}>
+                      className="flex items-center gap-1 transition-all hover:opacity-80 active:scale-95 tap-target"
+                      style={{ fontSize:'10px', color: prepped ? style.accent : 'var(--text-3)', fontWeight:600, minHeight:'24px' }}>
                       {prepped
                         ? <CheckCircle2 size={13} style={{ color:style.accent }} />
                         : <Circle size={13} />}
@@ -103,7 +105,7 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
                     </button>
                   </div>
                   <span className="flex items-center gap-0.5" style={{ fontSize:'10px', color:'var(--text-3)', opacity:0.7, flexShrink:0 }}>
-                    <RotateCcw size={9} /> {link ? 'Recipe →' : 'Details →'}
+                    <RotateCcw size={9} /> {hasAnyLink ? 'Recipe →' : 'Details →'}
                   </span>
                 </div>
               </>
@@ -116,14 +118,14 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
 
           {/* ── BACK ── */}
           <div className={`flip-card-back rounded-2xl border p-4 flex flex-col ${isDark ? style.dark : style.light}`}
-            style={{ height:'196px' }}>
+            style={{ height: cardHeight }}>
             <div className="flex items-center justify-between mb-3">
               <span className="font-bold" style={{ fontSize:'13px', color:style.accent, letterSpacing:'-0.01em' }}>
                 {meal?.item_name || category}
               </span>
               <button onClick={e => { e.stopPropagation(); setFlipped(false) }}
-                className="flex items-center gap-1 hover:opacity-80 transition-opacity"
-                style={{ fontSize:'11px', color:'var(--text-3)', fontWeight:600 }}>
+                className="flex items-center gap-1 hover:opacity-80 transition-opacity tap-target"
+                style={{ fontSize:'11px', color:'var(--text-3)', fontWeight:600, minHeight:'24px' }}>
                 <RotateCcw size={11} /> Back
               </button>
             </div>
@@ -137,13 +139,25 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
                     {meal.ingredients?.split(',').map(i => i.trim()).join(', ')}
                   </p>
                 </div>
-                {link ? (
-                  <a href={meal.notes} target="_blank" rel="noopener noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    className="mt-3 flex items-center justify-center gap-2 w-full rounded-xl py-2.5 font-semibold text-white transition-all hover:opacity-90 active:scale-95"
-                    style={{ fontSize:'13px', background:link.color, boxShadow:`0 4px 16px ${link.color}40` }}>
-                    {link.icon} {link.label}
-                  </a>
+                {hasAnyLink ? (
+                  <div className="flex flex-col gap-1.5 mt-2">
+                    {videoLink && (
+                      <a href={meal.video_url} target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="flex items-center justify-center gap-2 w-full rounded-xl py-2.5 font-semibold text-white transition-all hover:opacity-90 active:scale-95 tap-target"
+                        style={{ fontSize:'12.5px', background:videoLink.color, boxShadow:`0 4px 16px ${videoLink.color}40` }}>
+                        {videoLink.icon} {videoLink.label}
+                      </a>
+                    )}
+                    {hasWritten && (
+                      <a href={meal.written_url} target="_blank" rel="noopener noreferrer"
+                        onClick={e => e.stopPropagation()}
+                        className="flex items-center justify-center gap-2 w-full rounded-xl py-2.5 font-semibold transition-all hover:opacity-80 active:scale-95 tap-target"
+                        style={{ fontSize:'12.5px', background:'rgba(0,0,0,0.08)', color:'var(--text)' }}>
+                        📖 Read Recipe
+                      </a>
+                    )}
+                  </div>
                 ) : (
                   <div className="mt-3 rounded-xl py-2.5 text-center" style={{ fontSize:'12px', color:'var(--text-3)', background:'rgba(0,0,0,0.06)' }}>
                     No recipe link — add one in Recipes tab
@@ -167,8 +181,8 @@ export default function PlannerPage() {
   const { isDark }  = useTheme()
   const navigate    = useNavigate()
   const {
-    weeklyPlan, generating, dietTypes, expandedDay, undoStack, planDesc,
-    setDietTypes, setExpandedDay, setPlanDesc,
+    weeklyPlan, generating, dietTypes, expandedDay, undoStack, planDesc, servings,
+    setDietTypes, setExpandedDay, setPlanDesc, setServings,
     generate, regenerateDay, swapMeal, undoSwap, clearUndo,
     clearPlan, togglePrep, isPrepDone, prepProgress,
   } = usePlanStore()
@@ -213,13 +227,15 @@ export default function PlannerPage() {
     toast.success(`${DAYS[dayIdx]} refreshed!`)
   }
 
-  async function fetchAIDescription(plan) {
+  async function fetchAIDescription(plan, isManualRetry = false) {
     if (!plan) return
     setLoadingDesc(true)
     try {
       const desc = await generatePlanDescription(plan, DAYS, CATEGORIES)
       setPlanDesc(desc)
-    } catch { /* silently fail */ }
+    } catch (e) {
+      if (isManualRetry) toast.error(e.message || 'Could not generate summary', { duration: 5000 })
+    }
     setLoadingDesc(false)
   }
 
@@ -323,7 +339,7 @@ export default function PlannerPage() {
 
       {/* ── Controls ───────────────────────────────────────── */}
       <div className="card p-5 sm:p-6 mb-6" style={{ animation:'slideUp 0.4s cubic-bezier(0.16,1,0.3,1) 0.05s both' }}>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-5">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-6">
           <div>
             <p className="input-label mb-3">Diet filter</p>
             <div className="flex gap-2 flex-wrap">
@@ -331,14 +347,25 @@ export default function PlannerPage() {
                 const active = dietTypes.includes(key)
                 return (
                   <button key={key} onClick={() => toggleDiet(key)}
-                    className="px-4 py-2 rounded-full font-semibold transition-all duration-200 active:scale-95"
-                    style={{ fontSize:'13px', border:`2px solid ${active ? color : 'var(--border)'}`, background:active ? `${color}18` : 'transparent', color:active ? color : 'var(--text-3)' }}>
+                    className="px-4 py-2.5 rounded-full font-semibold transition-all duration-200 active:scale-95 tap-target"
+                    style={{ fontSize:'13.5px', border:`2px solid ${active ? color : 'var(--border)'}`, background:active ? `${color}18` : 'transparent', color:active ? color : 'var(--text-3)' }}>
                     {label}
                   </button>
                 )
               })}
             </div>
           </div>
+
+          {/* People count stepper */}
+          <div>
+            <p className="input-label mb-3 flex items-center gap-1.5"><Users size={11} /> Cooking for</p>
+            <div className="stepper">
+              <button onClick={() => setServings(servings - 1)} disabled={servings <= 1} className="stepper-btn" style={{ opacity: servings <= 1 ? 0.3 : 1 }}>−</button>
+              <span className="stepper-value">{servings}</span>
+              <button onClick={() => setServings(servings + 1)} disabled={servings >= 20} className="stepper-btn" style={{ opacity: servings >= 20 ? 0.3 : 1 }}>+</button>
+            </div>
+          </div>
+
           <div className="sm:ml-auto flex gap-2.5 flex-wrap items-center">
             {confirmRegen ? (
               <div className="flex items-center gap-2 flex-wrap" style={{ animation:'slideDown 0.2s ease' }}>
@@ -348,7 +375,7 @@ export default function PlannerPage() {
               </div>
             ) : (
               <button onClick={handleGenerate} disabled={generating || !dietTypes.length}
-                className="btn-primary btn" style={{ minWidth:'168px' }}>
+                className="btn-primary btn tap-target" style={{ minWidth:'168px' }}>
                 {generating
                   ? <><Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> Building…</>
                   : <><Sparkles size={16} /> {weeklyPlan ? 'Regenerate Week' : 'Generate Week'}</>}
@@ -390,7 +417,7 @@ export default function PlannerPage() {
             ) : planDesc ? (
               <p style={{ fontSize:'14px', color:'var(--text-2)', lineHeight:'1.6' }}>{planDesc}</p>
             ) : (
-              <button onClick={() => fetchAIDescription(weeklyPlan)}
+              <button onClick={() => fetchAIDescription(weeklyPlan, true)}
                 className="flex items-center gap-1.5 transition-opacity hover:opacity-70"
                 style={{ fontSize:'13px', color:'var(--brand)', fontWeight:600 }}>
                 <Sparkles size={13} /> Generate summary

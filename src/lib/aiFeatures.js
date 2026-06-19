@@ -2,25 +2,21 @@ import { supabase } from './supabase'
 
 // ── AI helper — routes through a secure Supabase Edge Function ──────────
 // The Groq API key lives server-side only (set as a Supabase secret).
-// This file never touches the key directly. Provider-agnostic by design —
-// the edge function can be swapped to any LLM without changing this file.
+// This file never touches the key directly. Provider-agnostic by design.
 
-async function callClaude(prompt, maxTokens = 400) {
+async function callAI(prompt, maxTokens = 400) {
   const { data, error } = await supabase.functions.invoke('ai-chef', {
     body: { prompt, maxTokens },
   })
 
   if (error) {
-    // supabase.functions.invoke() throws a generic "non-2xx status code" message
-    // on HTTP errors — the real error body is in error.context (a Response object)
     let detail = error.message
     try {
       if (error.context && typeof error.context.json === 'function') {
         const body = await error.context.json()
         if (body?.error) detail = body.error
       }
-    } catch { /* context wasn't readable JSON, fall back to generic message */ }
-
+    } catch { /* fall back to generic message */ }
     console.error('AI Chef error:', detail)
     throw new Error(detail || 'AI request failed')
   }
@@ -47,24 +43,60 @@ Meals this week: ${meals.join(', ')}
 
 Respond with ONLY the description, no preamble.`
 
-  return callClaude(prompt, 150)
+  return callAI(prompt, 150)
 }
 
 // ── AI Meal Suggestions ────────────────────────────────────────────────
-export async function getMealSuggestions(ingredientsOnHand, existingMealNames, category = 'any') {
-  const prompt = `You are a creative meal planning assistant. A user has these ingredients available: ${ingredientsOnHand}
+// sourceMode: 'library' = only use existing meals | 'web' = suggest new ones | 'both' = mixed
+// dietPreferences: array like ['veg','vegan','nonveg'] from the user's profile
+export async function getMealSuggestions({
+  ingredientsOnHand,
+  existingMeals = [],
+  category = 'any',
+  sourceMode = 'both',
+  dietPreferences = ['veg','vegan','nonveg'],
+  servings = 2,
+}) {
+  const dietLabel = dietPreferences.length === 3
+    ? 'any diet type'
+    : dietPreferences.map(d => d === 'veg' ? 'vegetarian' : d === 'vegan' ? 'vegan' : 'non-vegetarian').join(' or ')
 
-Their meal library already includes: ${existingMealNames.slice(0, 20).join(', ')}
+  let systemContext = ''
 
-Suggest 5 meal ideas${category !== 'any' ? ` for ${category}` : ''} they could make with what they have. For each meal give:
-- A creative name
-- The main ingredients needed (from what they have)
-- Whether it's vegan, veg, or nonveg
+  if (sourceMode === 'library' && existingMeals.length > 0) {
+    systemContext = `The user wants to find matching meals from their existing recipe library. Here are their saved meals:
+${existingMeals.map(m => `- ${m.item_name} (${m.category}, ${m.diet_type}): ${m.ingredients}`).join('\n')}
 
-Format as JSON array ONLY, no markdown, like:
-[{"name":"Meal Name","ingredients":"ing1, ing2, ing3","diet_type":"veg","category":"Breakfast"}]`
+Based on the ingredients they have, suggest up to 5 meals FROM THIS LIST that they can make now. Only suggest meals where they have most of the ingredients.`
+  } else if (sourceMode === 'web') {
+    systemContext = `Suggest 5 creative new meal ideas the user could make. These should be new recipes not necessarily in their library. Their existing meals are: ${existingMeals.slice(0,10).map(m => m.item_name).join(', ')} — try to suggest something different.`
+  } else {
+    // 'both'
+    systemContext = `Suggest 5 meal ideas — some can be from their existing library, some can be new ideas. Their existing meals include: ${existingMeals.slice(0,15).map(m => m.item_name).join(', ')}.`
+  }
 
-  const raw = await callClaude(prompt, 600)
+  const prompt = `You are a creative meal planning assistant. The user has these ingredients available: ${ingredientsOnHand}
+
+${systemContext}
+
+Requirements:
+- Diet preference: ${dietLabel}
+- Cooking for: ${servings} ${servings === 1 ? 'person' : 'people'}
+${category !== 'any' ? `- Meal type: ${category}` : ''}
+- Adjust ingredients/quantities for ${servings} ${servings === 1 ? 'person' : 'people'}
+
+For each meal provide:
+- A clear name
+- The main ingredients needed (scaled for ${servings} ${servings === 1 ? 'person' : 'people'})
+- Diet type (must be one of: veg, vegan, nonveg)
+- Category (must be one of: Breakfast, Lunch, Dinner, Snack)
+- A one-sentence description of what makes this meal great
+- Whether it's from their existing library (fromLibrary: true/false)
+
+Respond with a JSON array ONLY, no markdown backticks, no preamble:
+[{"name":"Meal Name","ingredients":"ing1, ing2, ing3","diet_type":"veg","category":"Dinner","description":"Quick and satisfying weeknight meal.","fromLibrary":false}]`
+
+  const raw = await callAI(prompt, 800)
   try {
     const clean = raw.replace(/```json|```/g, '').trim()
     const parsed = JSON.parse(clean)
@@ -75,8 +107,8 @@ Format as JSON array ONLY, no markdown, like:
   }
 }
 
-// ── AI Recipe Card Description ─────────────────────────────────────────
+// ── AI Recipe Tagline ─────────────────────────────────────────────────
 export async function generateRecipeTagline(mealName, ingredients) {
   const prompt = `Write a single enticing 8-12 word tagline for this recipe: "${mealName}" made with ${ingredients}. Just the tagline, nothing else.`
-  return callClaude(prompt, 50)
+  return callAI(prompt, 50)
 }

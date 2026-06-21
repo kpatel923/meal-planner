@@ -112,3 +112,42 @@ export async function generateRecipeTagline(mealName, ingredients) {
   const prompt = `Write a single enticing 8-12 word tagline for this recipe: "${mealName}" made with ${ingredients}. Just the tagline, nothing else.`
   return callAI(prompt, 50)
 }
+
+// ── Auto-detect recipe from a pasted URL ───────────────────────────────
+// Asks the AI to infer the recipe from the URL itself (title, slug, platform).
+// This works well for descriptive URLs (YouTube titles, recipe-site slugs)
+// but can't read paywalled or JS-rendered page content — it's a best-effort
+// fill-in, not a scrape. User should always review before saving.
+export async function parseRecipeFromURL(url) {
+  if (!url || !url.trim()) throw new Error('Please paste a URL first')
+
+  const isVideo = /youtube|youtu\.be|instagram|tiktok/i.test(url)
+
+  const prompt = `A user pasted this recipe URL: ${url}
+
+Based on the URL structure, slug, title text, and platform, infer what recipe this most likely is. Use your knowledge of common recipes and how URLs/titles are typically formatted on ${isVideo ? 'video platforms like YouTube/Instagram/TikTok' : 'recipe websites and blogs'}.
+
+Respond with JSON ONLY, no markdown, no preamble:
+{"name":"Best guess at recipe name","category":"Breakfast|Lunch|Dinner|Snack","diet_type":"veg|vegan|nonveg","ingredients":"comma, separated, likely, ingredients","confidence":"high|medium|low"}
+
+If you genuinely cannot infer anything meaningful from the URL, respond with:
+{"name":"","category":"Dinner","diet_type":"veg","ingredients":"","confidence":"low"}`
+
+  const raw = await callAI(prompt, 300)
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    return {
+      name:        parsed.name || '',
+      category:    parsed.category || 'Dinner',
+      diet_type:   parsed.diet_type || 'veg',
+      ingredients: parsed.ingredients || '',
+      confidence:  parsed.confidence || 'low',
+      videoUrl:    isVideo ? url : '',
+      writtenUrl:  !isVideo ? url : '',
+    }
+  } catch (e) {
+    console.error('Failed to parse recipe from URL:', raw)
+    throw new Error('Could not detect recipe details from that URL — try entering manually')
+  }
+}

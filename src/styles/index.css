@@ -371,3 +371,30 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration:0.01ms !important; transition-duration:0.01ms !important; }
 }
+
+/* ── PRINT ─────────────────────────────────────────────── */
+@media print {
+  /* Hide all chrome — nav, buttons, modals, toasts */
+  aside, nav, .btn, .btn-primary, .btn-secondary, .btn-ghost, .btn-danger,
+  .modal-backdrop, .stepper, .segmented, .flip-card-back,
+  .no-print { display: none !important; }
+
+  body, .page-container { background: #fff !important; color: #000 !important; }
+  .page-container { max-width: 100% !important; padding: 0 !important; }
+
+  .card, .card-hover { box-shadow: none !important; border: 1px solid #ccc !important; break-inside: avoid; }
+
+  .print-only { display: block !important; }
+
+  a { color: #000 !important; text-decoration: underline !important; }
+
+  /* Flip cards: show only the front face, flattened, no 3D transform */
+  .flip-card-wrapper, .flip-card-inner, .flip-card-front {
+    position: static !important;
+    transform: none !important;
+    height: auto !important;
+  }
+
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.print-only { display: none; }

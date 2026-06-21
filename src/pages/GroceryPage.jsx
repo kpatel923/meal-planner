@@ -1,14 +1,15 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlans } from '../hooks/usePlans'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { buildGroceryList } from '../lib/mealLogic'
 import { groupGroceryByCategory, GROCERY_CATEGORY_ORDER, estimateQuantity } from '../lib/groceryCategories'
 import { buildGroceryShareText, shareText } from '../lib/sharing'
+import { saveForOffline, loadOfflineData, saveOfflineChecked, isOnline } from '../lib/offline'
 import {
   ShoppingCart, CheckCircle2, Square, Download,
   Info, Sparkles, ArrowRight, Share2, ChevronDown,
-  ChevronRight, X, Loader2
+  ChevronRight, X, Loader2, Printer, WifiOff, Wifi
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -58,12 +59,58 @@ export default function GroceryPage() {
   const [selectedPlanId,  setSelectedPlanId]  = useState('')
   const [collapsedCats,   setCollapsedCats]   = useState({})
   const [sharing,         setSharing]         = useState(false)
+  const [online,          setOnline]          = useState(isOnline())
+  const [offlineLoaded,   setOfflineLoaded]   = useState(false)
+  const [offlinePlan,     setOfflinePlan]     = useState(null) // fallback plan loaded from offline cache
 
-  const groceryMap  = useMemo(() => weeklyPlan ? buildGroceryList(weeklyPlan) : {}, [weeklyPlan])
+  // Effective plan: live store plan, or offline-cached plan if we have no live plan
+  const effectivePlan = weeklyPlan || offlinePlan
+  const usingOfflineCache = !weeklyPlan && !!offlinePlan
+
+  const groceryMap  = useMemo(() => effectivePlan ? buildGroceryList(effectivePlan) : {}, [effectivePlan])
   const grouped     = useMemo(() => groupGroceryByCategory(groceryMap), [groceryMap])
   const allIngreds  = useMemo(() => Object.keys(groceryMap), [groceryMap])
   const checkedCount = allIngreds.filter(i => checked[i]).length
   const progress     = allIngreds.length ? Math.round((checkedCount / allIngreds.length) * 100) : 0
+
+  // Track online/offline status
+  useEffect(() => {
+    function handleOnline()  { setOnline(true) }
+    function handleOffline() { setOnline(false) }
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [])
+
+  // Cache the current grocery list whenever it changes, for offline access later
+  useEffect(() => {
+    if (weeklyPlan && Object.keys(groceryMap).length) {
+      saveForOffline(weeklyPlan, groceryMap, checked).catch(() => {})
+    }
+  }, [weeklyPlan, groceryMap])
+
+  // Persist checked items to offline cache as they're toggled
+  useEffect(() => {
+    if (weeklyPlan) saveOfflineChecked(checked).catch(() => {})
+  }, [checked])
+
+  // If there's no live plan (e.g. fresh offline page load), try loading from offline cache
+  useEffect(() => {
+    if (!weeklyPlan && !offlineLoaded) {
+      loadOfflineData().then(data => {
+        if (data?.weeklyPlan) {
+          setOfflinePlan(data.weeklyPlan)
+          setChecked(data.checkedItems || {})
+        }
+        setOfflineLoaded(true)
+      })
+    }
+  }, [weeklyPlan, offlineLoaded])
+
+  function handlePrint() { window.print() }
 
   function toggle(ing)     { setChecked(p => ({ ...p, [ing]: !p[ing] })) }
   function selectAll()     { setChecked(Object.fromEntries(allIngreds.map(i => [i, true]))) }
@@ -107,7 +154,19 @@ export default function GroceryPage() {
   }
 
   // ── Empty state ──────────────────────────────────────────
-  if (!weeklyPlan) return (
+  // Wait for the offline-cache check to finish before deciding there's nothing to show —
+  // otherwise we'd flash "no plan" for a moment even when a cached plan exists.
+  if (!effectivePlan && !offlineLoaded && !weeklyPlan) return (
+    <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
+      <span className="page-eyebrow">Grocery List</span>
+      <h1 className="section-title mb-2">What to buy</h1>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 size={24} className="animate-spin" style={{ color: 'var(--text-3)' }} />
+      </div>
+    </div>
+  )
+
+  if (!effectivePlan) return (
     <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
       <span className="page-eyebrow">Grocery List</span>
       <h1 className="section-title mb-2">What to buy</h1>
@@ -156,6 +215,19 @@ export default function GroceryPage() {
   return (
     <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
 
+      {/* Offline banner */}
+      {(!online || usingOfflineCache) && (
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl mb-5 no-print"
+          style={{ background: 'rgba(245,158,11,0.1)', border: '1.5px solid rgba(245,158,11,0.25)', animation: 'slideDown 0.3s ease' }}>
+          <WifiOff size={16} style={{ color: '#F59E0B', flexShrink: 0 }} />
+          <p style={{ fontSize: '13.5px', color: '#F59E0B', fontWeight: 600 }}>
+            {!online
+              ? "You're offline — showing your saved grocery list. Changes will sync once you're back online."
+              : 'Showing your last cached grocery list.'}
+          </p>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-7">
         <div>
@@ -168,10 +240,16 @@ export default function GroceryPage() {
             <span className="badge flex items-center gap-1" style={{ background: 'rgba(31,158,98,0.1)', color: 'var(--brand)', border: '1px solid rgba(31,158,98,0.2)', fontSize: '11px' }}>
               👥 {servings} {servings === 1 ? 'person' : 'people'}
             </span>
+            <span className="badge flex items-center gap-1 no-print" style={{ background: online ? 'rgba(31,158,98,0.08)' : 'rgba(245,158,11,0.1)', color: online ? 'var(--brand)' : '#F59E0B', fontSize: '10.5px' }}>
+              {online ? <Wifi size={10} /> : <WifiOff size={10} />} {online ? 'Synced' : 'Offline'}
+            </span>
           </div>
         </div>
-        <div className="flex gap-2.5 flex-wrap">
-          <button onClick={handleShare} disabled={sharing} className="btn-secondary btn gap-2 tap-target">
+        <div className="flex gap-2.5 flex-wrap no-print">
+          <button onClick={handlePrint} className="btn-secondary btn gap-2 tap-target">
+            <Printer size={16} /> Print
+          </button>
+          <button onClick={handleShare} disabled={sharing || !online} className="btn-secondary btn gap-2 tap-target">
             {sharing ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Share2 size={16} />}
             Share list
           </button>

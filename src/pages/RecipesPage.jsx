@@ -1,17 +1,23 @@
 import { useState, useRef, useEffect } from 'react'
 import { useMeals } from '../hooks/useMeals'
+import { useAuth } from '../hooks/useAuth'
+import { supabase } from '../lib/supabase'
 import { parseMealsFromFile, exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
 import { DIET_LABELS, CATEGORIES } from '../lib/mealLogic'
+import { estimateNutrition, nutritionColor } from '../lib/nutrition'
+import { estimateCost, getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
+import { parseRecipeFromURL } from '../lib/aiFeatures'
 import {
   Plus, Search, Upload, Download, Edit2, Trash2,
   Loader2, X, BookOpen, AlertTriangle, ChevronDown,
   ExternalLink, Link2, Play, Camera, FileText,
-  Sparkles, Clock, Users
+  Sparkles, Clock, Users, ImagePlus, Wand2, Flame,
+  DollarSign, Trash
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const DIET_OPTIONS = ['veg','vegan','nonveg']
-const EMPTY = { item_name:'', category:'Breakfast', ingredients:'', diet_type:'veg', video_url:'', written_url:'', detail_notes:'' }
+const EMPTY = { item_name:'', category:'Breakfast', ingredients:'', diet_type:'veg', video_url:'', written_url:'', detail_notes:'', photo_url:'' }
 
 const DIET_COLORS = {
   veg:    { bg:'rgba(31,158,98,0.1)',  text:'#1F9E62', border:'rgba(31,158,98,0.25)' },
@@ -37,14 +43,49 @@ function getVideoMeta(url) {
 // ── Recipe Detail Modal ──────────────────────────────────────────────
 function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
   if (!meal) return null
+  const [sharing, setSharing] = useState(false)
   const dc = DIET_COLORS[meal.diet_type] || DIET_COLORS.veg
   const videoMeta = getVideoMeta(meal.video_url)
   const ingredients = meal.ingredients?.split(',').map(i => i.trim()).filter(Boolean) || []
   const sourceBadge = SOURCE_BADGES[meal.source]
 
+  const nutrition = meal.calories != null
+    ? { calories: meal.calories, protein_g: meal.protein_g, carbs_g: meal.carbs_g, fat_g: meal.fat_g, fiber_g: meal.fiber_g }
+    : estimateNutrition(meal.ingredients, 1)
+  const cost = meal.cost_per_serving != null ? meal.cost_per_serving : estimateCost(meal.ingredients)
+  const budgetTag = meal.budget_tag || (cost != null ? getBudgetTag(cost) : null)
+  const budgetStyle = budgetTag ? BUDGET_TAG_STYLES[budgetTag] : null
+
+  async function handleShareRecipe() {
+    setSharing(true)
+    try {
+      if (!meal.is_public) {
+        const { error } = await supabase.from('meals').update({ is_public: true }).eq('id', meal.id)
+        if (error) throw error
+      }
+      const url = `${window.location.origin}/recipe/${meal.id}`
+      if (navigator.share) {
+        await navigator.share({ title: meal.item_name, url })
+      } else {
+        await navigator.clipboard.writeText(url)
+        toast.success('Link copied to clipboard!')
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') toast.error('Could not create share link')
+    }
+    setSharing(false)
+  }
+
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()} style={{ animation: 'fadeIn 0.2s ease' }}>
       <div className="modal-panel">
+        {/* Photo */}
+        {meal.photo_url && (
+          <div style={{ height:'220px', overflow:'hidden' }}>
+            <img src={meal.photo_url} alt="" className="w-full h-full object-cover" />
+          </div>
+        )}
+
         {/* Header band */}
         <div className="relative p-6 sm:p-8" style={{ background: `linear-gradient(135deg, ${dc.bg}, transparent)`, borderBottom: '1.5px solid var(--border)' }}>
           <button onClick={onClose} className="btn-ghost btn-icon absolute top-4 right-4 tap-target" style={{ background: 'var(--surface)' }}>
@@ -63,6 +104,11 @@ function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
                 {sourceBadge.icon} {sourceBadge.label}
               </span>
             )}
+            {budgetStyle && (
+              <span className="badge flex items-center gap-1" style={{ background: budgetStyle.bg, color: budgetStyle.color, fontSize: '11px' }}>
+                {budgetStyle.emoji} {budgetStyle.label}{cost != null ? ` · ${formatCost(cost)}` : ''}
+              </span>
+            )}
           </div>
 
           <h2 className="font-display font-bold leading-tight" style={{ fontSize: 'clamp(24px, 4vw, 32px)', color: 'var(--text)', letterSpacing: '-0.03em' }}>
@@ -72,6 +118,32 @@ function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
 
         {/* Body */}
         <div className="p-6 sm:p-8 space-y-7">
+
+          {/* Nutrition breakdown */}
+          {nutrition?.calories != null && (
+            <div>
+              <p className="font-semibold mb-3 flex items-center gap-2" style={{ fontSize: '14px', color: 'var(--text)' }}>
+                <Flame size={14} /> Nutrition
+                {nutrition.estimated && <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500 }}>(estimated)</span>}
+              </p>
+              <div className="grid grid-cols-5 gap-2">
+                {[
+                  { label: 'Cal',     val: nutrition.calories,           unit: '' },
+                  { label: 'Protein', val: nutrition.protein_g,          unit: 'g' },
+                  { label: 'Carbs',   val: nutrition.carbs_g,            unit: 'g' },
+                  { label: 'Fat',     val: nutrition.fat_g,              unit: 'g' },
+                  { label: 'Fiber',   val: nutrition.fiber_g,            unit: 'g' },
+                ].map(({ label, val, unit }) => (
+                  <div key={label} className="text-center p-2.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                    <p className="font-display font-bold" style={{ fontSize: '17px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
+                      {val != null ? `${val}${unit}` : '—'}
+                    </p>
+                    <p style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Ingredients */}
           <div>
@@ -133,6 +205,10 @@ function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
 
         {/* Footer actions */}
         <div className="flex gap-3 p-6 sm:p-8 pt-0">
+          <button onClick={handleShareRecipe} disabled={sharing} className="btn-secondary btn flex-1 tap-target">
+            {sharing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+            Share
+          </button>
           <button onClick={() => onEdit(meal)} className="btn-secondary btn flex-1 tap-target">
             <Edit2 size={16} /> Edit
           </button>
@@ -146,6 +222,7 @@ function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
 }
 
 export default function RecipesPage() {
+  const { user } = useAuth()
   const [search,       setSearch]       = useState('')
   const [catFilter,    setCatFilter]    = useState('')
   const [dietFilter,   setDietFilter]   = useState([])
@@ -158,7 +235,12 @@ export default function RecipesPage() {
   const [importErrors, setImportErrors] = useState([])
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [showExport,   setShowExport]   = useState(false)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [detectUrl,    setDetectUrl]    = useState('')
+  const [detecting,    setDetecting]    = useState(false)
+  const [showDetect,   setShowDetect]   = useState(false)
   const fileRef   = useRef(null)
+  const photoRef  = useRef(null)
   const exportRef = useRef(null)
 
   useEffect(() => {
@@ -175,7 +257,7 @@ export default function RecipesPage() {
     diet_types: dietFilter.length ? dietFilter : undefined,
   })
 
-  function openAdd()       { setForm(EMPTY); setEditMeal(null); setShowForm(true) }
+  function openAdd()       { setForm(EMPTY); setEditMeal(null); setShowDetect(false); setDetectUrl(''); setShowForm(true) }
   function openEdit(meal)  {
     setForm({
       item_name:    meal.item_name,
@@ -185,13 +267,71 @@ export default function RecipesPage() {
       video_url:    meal.video_url || '',
       written_url:  meal.written_url || '',
       detail_notes: meal.detail_notes || '',
+      photo_url:    meal.photo_url || '',
     })
     setEditMeal(meal)
     setViewMeal(null)
+    setShowDetect(false)
+    setDetectUrl('')
     setShowForm(true)
   }
-  function closeForm()     { setShowForm(false); setEditMeal(null); setForm(EMPTY) }
+  function closeForm()     { setShowForm(false); setEditMeal(null); setForm(EMPTY); setShowDetect(false); setDetectUrl('') }
   function setField(k, v)  { setForm(p => ({ ...p, [k]:v })) }
+
+  // ── Photo upload to Supabase Storage ─────────────────────────────
+  async function handlePhotoSelect(e) {
+    const file = e.target.files?.[0]
+    if (!file || !user) return
+    if (file.size > 5 * 1024 * 1024) { toast.error('Photo must be under 5MB'); return }
+
+    setUploadingPhoto(true)
+    const ext  = file.name.split('.').pop()
+    const path = `${user.id}/${Date.now()}.${ext}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('meal-photos')
+      .upload(path, file, { upsert: true })
+
+    if (uploadError) {
+      toast.error('Photo upload failed — try again')
+      setUploadingPhoto(false)
+      return
+    }
+
+    const { data: urlData } = supabase.storage.from('meal-photos').getPublicUrl(path)
+    setField('photo_url', urlData.publicUrl)
+    setUploadingPhoto(false)
+    toast.success('Photo uploaded!')
+  }
+
+  function removePhoto() { setField('photo_url', '') }
+
+  // ── Auto-detect recipe from pasted URL ───────────────────────────
+  async function handleDetectFromUrl() {
+    if (!detectUrl.trim()) { toast.error('Paste a URL first'); return }
+    setDetecting(true)
+    try {
+      const result = await parseRecipeFromURL(detectUrl.trim())
+      if (!result.name) {
+        toast.error('Could not detect details from that URL — try entering manually')
+      } else {
+        setForm(p => ({
+          ...p,
+          item_name:   result.name || p.item_name,
+          category:    result.category || p.category,
+          diet_type:   result.diet_type || p.diet_type,
+          ingredients: result.ingredients || p.ingredients,
+          video_url:   result.videoUrl || p.video_url,
+          written_url: result.writtenUrl || p.written_url,
+        }))
+        toast.success(`Filled in! (${result.confidence} confidence — review before saving)`)
+        setShowDetect(false)
+      }
+    } catch (e) {
+      toast.error(e.message || 'Could not detect recipe from URL')
+    }
+    setDetecting(false)
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -205,6 +345,7 @@ export default function RecipesPage() {
       video_url:    form.video_url.trim() || null,
       written_url:  form.written_url.trim() || null,
       detail_notes: form.detail_notes.trim() || null,
+      photo_url:    form.photo_url || null,
     }
     if (!editMeal) payload.source = 'manual'
     editMeal ? await updateMeal(editMeal.id, payload) : await addMeal(payload)
@@ -359,48 +500,79 @@ export default function RecipesPage() {
                     const hasVideo = !!meal.video_url
                     const hasWritten = !!meal.written_url
                     const sourceBadge = SOURCE_BADGES[meal.source]
+                    const nutrition = meal.calories != null
+                      ? { calories: meal.calories }
+                      : estimateNutrition(meal.ingredients, 1)
+                    const cost = meal.cost_per_serving != null ? meal.cost_per_serving : estimateCost(meal.ingredients)
+                    const budgetTag = meal.budget_tag || (cost != null ? getBudgetTag(cost) : null)
+                    const budgetStyle = budgetTag ? BUDGET_TAG_STYLES[budgetTag] : null
 
                     return (
                       <button key={meal.id} onClick={() => setViewMeal(meal)}
-                        className="card-hover p-5 group flex flex-col text-left w-full"
-                        style={{ animation:'scaleIn 0.2s ease both', minHeight: '168px' }}>
+                        className="card-hover group flex flex-col text-left w-full overflow-hidden"
+                        style={{ animation:'scaleIn 0.2s ease both', minHeight: '168px', padding: 0 }}>
 
-                        {/* Top row */}
-                        <div className="flex items-start justify-between gap-2 mb-2.5">
-                          <h3 className="font-semibold leading-snug" style={{ fontSize:'16.5px', color:'var(--text)', letterSpacing:'-0.02em' }}>
-                            {meal.item_name}
-                          </h3>
-                          <span className="badge shrink-0" style={{ background:dc.bg, color:dc.text, border:`1px solid ${dc.border}` }}>
-                            {DIET_LABELS[meal.diet_type]?.label}
-                          </span>
-                        </div>
+                        {/* Photo thumbnail */}
+                        {meal.photo_url && (
+                          <div style={{ height:'120px', overflow:'hidden' }}>
+                            <img src={meal.photo_url} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                          </div>
+                        )}
 
-                        {/* Ingredients */}
-                        <p className="leading-relaxed flex-1 mb-3" style={{ fontSize:'13px', color:'var(--text-3)', lineHeight:'1.6' }}>
-                          {meal.ingredients?.split(',').slice(0, 5).map(i => i.trim()).join(' · ')}
-                          {meal.ingredients?.split(',').length > 5 ? ' …' : ''}
-                        </p>
+                        <div className="p-5 flex flex-col flex-1">
+                          {/* Top row */}
+                          <div className="flex items-start justify-between gap-2 mb-2.5">
+                            <h3 className="font-semibold leading-snug" style={{ fontSize:'16.5px', color:'var(--text)', letterSpacing:'-0.02em' }}>
+                              {meal.item_name}
+                            </h3>
+                            <span className="badge shrink-0" style={{ background:dc.bg, color:dc.text, border:`1px solid ${dc.border}` }}>
+                              {DIET_LABELS[meal.diet_type]?.label}
+                            </span>
+                          </div>
 
-                        {/* Bottom row: link indicators + source badge */}
-                        <div className="flex items-center gap-2 flex-wrap pt-3" style={{ borderTop:'1px solid var(--border)' }}>
-                          {hasVideo && (
-                            <span className="flex items-center gap-1" style={{ fontSize:'11.5px', color: getVideoMeta(meal.video_url)?.color, fontWeight:600 }}>
-                              <Play size={12} /> Video
-                            </span>
+                          {/* Ingredients */}
+                          <p className="leading-relaxed flex-1 mb-3" style={{ fontSize:'13px', color:'var(--text-3)', lineHeight:'1.6' }}>
+                            {meal.ingredients?.split(',').slice(0, 5).map(i => i.trim()).join(' · ')}
+                            {meal.ingredients?.split(',').length > 5 ? ' …' : ''}
+                          </p>
+
+                          {/* Nutrition + budget chips */}
+                          {(nutrition?.calories || budgetStyle) && (
+                            <div className="flex items-center gap-2 flex-wrap mb-3">
+                              {nutrition?.calories && (
+                                <span className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ fontSize:'11px', fontWeight:600, color: nutritionColor(nutrition.calories), background:'var(--surface-2)' }}>
+                                  <Flame size={11} /> {nutrition.calories} cal
+                                </span>
+                              )}
+                              {budgetStyle && (
+                                <span className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ fontSize:'11px', fontWeight:600, color:budgetStyle.color, background:budgetStyle.bg }}>
+                                  {budgetStyle.emoji} {budgetStyle.label}
+                                </span>
+                              )}
+                            </div>
                           )}
-                          {hasWritten && (
-                            <span className="flex items-center gap-1" style={{ fontSize:'11.5px', color:'var(--text-3)', fontWeight:600 }}>
-                              <FileText size={12} /> Recipe
-                            </span>
-                          )}
-                          {sourceBadge && (
-                            <span className="flex items-center gap-1 ml-auto" style={{ fontSize:'10.5px', color:sourceBadge.text, fontWeight:700 }}>
-                              {sourceBadge.icon} {sourceBadge.label}
-                            </span>
-                          )}
-                          {!hasVideo && !hasWritten && !sourceBadge && (
-                            <span style={{ fontSize:'11.5px', color:'var(--text-3)', opacity: 0.6 }}>Tap to view →</span>
-                          )}
+
+                          {/* Bottom row: link indicators + source badge */}
+                          <div className="flex items-center gap-2 flex-wrap pt-3" style={{ borderTop:'1px solid var(--border)' }}>
+                            {hasVideo && (
+                              <span className="flex items-center gap-1" style={{ fontSize:'11.5px', color: getVideoMeta(meal.video_url)?.color, fontWeight:600 }}>
+                                <Play size={12} /> Video
+                              </span>
+                            )}
+                            {hasWritten && (
+                              <span className="flex items-center gap-1" style={{ fontSize:'11.5px', color:'var(--text-3)', fontWeight:600 }}>
+                                <FileText size={12} /> Recipe
+                              </span>
+                            )}
+                            {sourceBadge && (
+                              <span className="flex items-center gap-1 ml-auto" style={{ fontSize:'10.5px', color:sourceBadge.text, fontWeight:700 }}>
+                                {sourceBadge.icon} {sourceBadge.label}
+                              </span>
+                            )}
+                            {!hasVideo && !hasWritten && !sourceBadge && (
+                              <span style={{ fontSize:'11.5px', color:'var(--text-3)', opacity: 0.6 }}>Tap to view →</span>
+                            )}
+                          </div>
                         </div>
                       </button>
                     )
@@ -433,7 +605,65 @@ export default function RecipesPage() {
               </h3>
               <button onClick={closeForm} className="btn-ghost btn-icon tap-target"><X size={20} /></button>
             </div>
+
+            {/* Auto-detect from URL */}
+            {!editMeal && (
+              <div className="px-6 sm:px-7 pt-5">
+                {!showDetect ? (
+                  <button onClick={() => setShowDetect(true)} type="button"
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold transition-all tap-target"
+                    style={{ fontSize:'13.5px', background:'rgba(99,102,241,0.08)', border:'1.5px dashed rgba(99,102,241,0.3)', color:'#6366F1' }}>
+                    <Wand2 size={15} /> Auto-fill from a recipe URL
+                  </button>
+                ) : (
+                  <div className="p-4 rounded-2xl" style={{ background:'rgba(99,102,241,0.06)', border:'1.5px solid rgba(99,102,241,0.2)' }}>
+                    <p className="font-semibold mb-2 flex items-center gap-1.5" style={{ fontSize:'13px', color:'#6366F1' }}>
+                      <Wand2 size={13} /> Paste a recipe URL to auto-fill
+                    </p>
+                    <div className="flex gap-2">
+                      <input className="input" style={{ fontSize:'13.5px' }} value={detectUrl}
+                        onChange={e => setDetectUrl(e.target.value)}
+                        placeholder="https://youtube.com/... or any recipe link"
+                        onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleDetectFromUrl())} />
+                      <button onClick={handleDetectFromUrl} disabled={detecting} type="button"
+                        className="btn tap-target shrink-0" style={{ background:'#6366F1', color:'#fff', fontSize:'13px', padding:'10px 16px' }}>
+                        {detecting ? <Loader2 size={14} className="animate-spin" /> : 'Detect'}
+                      </button>
+                    </div>
+                    <p style={{ fontSize:'11px', color:'var(--text-3)', marginTop:'8px' }}>
+                      AI infers details from the URL — always review before saving.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="p-6 sm:p-7 space-y-5">
+
+              {/* Photo upload */}
+              <div>
+                <label className="input-label">Photo (optional)</label>
+                <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhotoSelect} />
+                {form.photo_url ? (
+                  <div className="relative rounded-2xl overflow-hidden" style={{ height:'160px' }}>
+                    <img src={form.photo_url} alt="" className="w-full h-full object-cover" />
+                    <button type="button" onClick={removePhoto}
+                      className="absolute top-2 right-2 p-2 rounded-xl tap-target"
+                      style={{ background:'rgba(0,0,0,0.6)', color:'#fff' }}>
+                      <Trash size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <button type="button" onClick={() => photoRef.current?.click()} disabled={uploadingPhoto}
+                    className="w-full flex flex-col items-center justify-center gap-2 rounded-2xl transition-all tap-target"
+                    style={{ height:'120px', background:'var(--surface-2)', border:'1.5px dashed var(--border)', color:'var(--text-3)' }}>
+                    {uploadingPhoto
+                      ? <Loader2 size={22} className="animate-spin" />
+                      : <><ImagePlus size={22} /> <span style={{ fontSize:'13px' }}>Add a photo</span></>}
+                  </button>
+                )}
+              </div>
+
               <div>
                 <label className="input-label">Meal name *</label>
                 <input className="input" value={form.item_name}

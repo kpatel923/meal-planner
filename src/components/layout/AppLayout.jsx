@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
+import Onboarding from '../Onboarding'
 import {
   CalendarDays, ShoppingCart, Bookmark,
   BookOpen, User, LogOut, ChefHat,
@@ -28,6 +30,8 @@ const MOBILE_NAV = [
 
 export default function AppLayout() {
   const { user, profile, signOut } = useAuth()
+  const [dismissedOnboarding, setDismissedOnboarding] = useState(false)
+  const showOnboarding = profile && profile.onboarding_done === false && !dismissedOnboarding
   const { isDark, toggle }         = useTheme()
   const navigate                   = useNavigate()
 
@@ -202,6 +206,9 @@ export default function AppLayout() {
           ))}
         </div>
       </nav>
+
+      {/* Onboarding overlay — shows once for new users */}
+      {showOnboarding && <Onboarding onComplete={() => setDismissedOnboarding(true)} />}
     </div>
   )
 }

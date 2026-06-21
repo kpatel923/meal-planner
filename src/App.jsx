@@ -5,6 +5,7 @@ import { ThemeProvider, useTheme } from './hooks/useTheme'
 import { PlanProvider } from './hooks/usePlanStore'
 
 import AuthPage          from './pages/AuthPage'
+import PublicRecipePage  from './pages/PublicRecipePage'
 import PlannerPage       from './pages/PlannerPage'
 import RecipesPage       from './pages/RecipesPage'
 import GroceryPage       from './pages/GroceryPage'
@@ -59,6 +60,7 @@ export default function App() {
             <Routes>
               {/* Public */}
               <Route path="/auth" element={<PublicRoute><AuthPage /></PublicRoute>} />
+              <Route path="/recipe/:id" element={<PublicRecipePage />} />
 
               {/* Protected — all inside AppLayout */}
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { buildWeeklyPlan } from '../lib/mealLogic'
+import { getRecentlyUsedMeals, applyAvoidRepeats, recordMealsUsed } from '../lib/avoidRepeats'
 
 const PlanContext = createContext(null)
 const SERVINGS_KEY = 'mealplan_servings'
@@ -13,18 +14,19 @@ function loadStoredServings() {
 }
 
 export function PlanProvider({ children }) {
-  const [weeklyPlan,   setWeeklyPlan]   = useState(null)
-  const [dietTypes,    setDietTypes]    = useState(['veg','vegan','nonveg'])
-  const [servings,     setServingsRaw]  = useState(loadStoredServings)
-  const [generating,   setGenerating]   = useState(false)
-  const [expandedDay,  setExpandedDay]  = useState(null)
-  const [prepChecked,  setPrepChecked]  = useState({})   // { "0-Breakfast": true }
-  const [undoStack,    setUndoStack]    = useState([])   // for undo swap
-  const [planDesc,     setPlanDesc]     = useState(null) // AI description
-  const undoTimerRef = useRef(null)
+  const [weeklyPlan,    setWeeklyPlan]    = useState(null)
+  const [dietTypes,     setDietTypes]     = useState(['veg','vegan','nonveg'])
+  const [servings,      setServingsRaw]   = useState(loadStoredServings)
+  const [generating,    setGenerating]    = useState(false)
+  const [expandedDay,   setExpandedDay]   = useState(null)
+  const [prepChecked,   setPrepChecked]   = useState({})   // { "0-Breakfast": true }
+  const [undoStack,     setUndoStack]     = useState([])   // for undo swap
+  const [planDesc,      setPlanDesc]      = useState(null) // AI description
+  const [avoidRepeats,  setAvoidRepeats]  = useState(true) // toggle for the feature
+  const [prevPlanSnapshot, setPrevPlanSnapshot] = useState(null) // for undo-generate
+  const undoTimerRef      = useRef(null)
+  const undoGenTimerRef   = useRef(null)
 
-  // Persist servings choice across sessions — this is a "how many people
-  // am I usually cooking for" preference, not tied to any one plan
   const setServings = useCallback((n) => {
     const clamped = Math.min(20, Math.max(1, n))
     setServingsRaw(clamped)
@@ -35,19 +37,40 @@ export function PlanProvider({ children }) {
     try { sessionStorage.setItem('mealplan_current', JSON.stringify(plan)) } catch {}
   }
 
-  const generate = useCallback((meals) => {
+  // generate() now optionally takes a userId to apply avoid-repeats logic.
+  // Snapshots the previous plan so generate can be undone.
+  const generate = useCallback(async (meals, userId = null) => {
     setGenerating(true)
     setPlanDesc(null)
+
+    let pool = meals
+    if (avoidRepeats && userId) {
+      try {
+        const recent = await getRecentlyUsedMeals(userId, 14)
+        pool = applyAvoidRepeats(meals, recent)
+      } catch { /* fall back to unfiltered pool on error */ }
+    }
+
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         try {
-          const plan = buildWeeklyPlan(meals)
-          setWeeklyPlan(plan)
+          const plan = buildWeeklyPlan(pool)
+          setWeeklyPlan(prevPlan => {
+            // snapshot for undo-generate, separate from undo-swap
+            if (prevPlan) {
+              setPrevPlanSnapshot(prevPlan)
+              if (undoGenTimerRef.current) clearTimeout(undoGenTimerRef.current)
+              undoGenTimerRef.current = setTimeout(() => setPrevPlanSnapshot(null), 10000)
+            }
+            return plan
+          })
           setExpandedDay(0)
           setPrepChecked({})
           setUndoStack([])
           persistPlan(plan)
           setGenerating(false)
+          // Fire-and-forget: record usage for future avoid-repeats
+          if (userId) recordMealsUsed(userId, plan).catch(() => {})
           resolve(plan)
         } catch (e) {
           setGenerating(false)
@@ -55,16 +78,28 @@ export function PlanProvider({ children }) {
         }
       }, 600)
     })
+  }, [avoidRepeats])
+
+  const undoGenerate = useCallback(() => {
+    if (!prevPlanSnapshot) return
+    if (undoGenTimerRef.current) clearTimeout(undoGenTimerRef.current)
+    setWeeklyPlan(prevPlanSnapshot)
+    persistPlan(prevPlanSnapshot)
+    setPrevPlanSnapshot(null)
+  }, [prevPlanSnapshot])
+
+  const clearUndoGenerate = useCallback(() => {
+    if (undoGenTimerRef.current) clearTimeout(undoGenTimerRef.current)
+    setPrevPlanSnapshot(null)
   }, [])
 
   // Regenerate a single day only
   const regenerateDay = useCallback((dayIdx, meals) => {
     setWeeklyPlan(prev => {
       if (!prev) return prev
-      // Build a temp plan just to get 4 meals for that day
       try {
         const tempPlan = buildWeeklyPlan(meals)
-        const newDayMeals = tempPlan[0] // take day 0 from temp plan
+        const newDayMeals = tempPlan[0]
         const next = { ...prev, [dayIdx]: newDayMeals }
         persistPlan(next)
         return next
@@ -75,16 +110,29 @@ export function PlanProvider({ children }) {
   const swapMeal = useCallback((dayIdx, category, newMeal) => {
     setWeeklyPlan(prev => {
       if (!prev) return prev
-      // Save to undo stack before swapping
       const oldMeal = prev[dayIdx]?.[category]
       setUndoStack(stack => {
-        // Clear existing timer
         if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
-        // Auto-clear undo after 8 seconds
         undoTimerRef.current = setTimeout(() => setUndoStack([]), 8000)
         return [{ dayIdx, category, oldMeal, newMeal }]
       })
       const next = { ...prev, [dayIdx]: { ...prev[dayIdx], [category]: newMeal } }
+      persistPlan(next)
+      return next
+    })
+  }, [])
+
+  // Reorder: move a meal from one day/category slot to another (drag-and-drop)
+  const reorderMeal = useCallback((fromDayIdx, fromCategory, toDayIdx, toCategory) => {
+    setWeeklyPlan(prev => {
+      if (!prev) return prev
+      const fromMeal = prev[fromDayIdx]?.[fromCategory]
+      const toMeal   = prev[toDayIdx]?.[toCategory]
+      if (!fromMeal) return prev
+
+      const next = JSON.parse(JSON.stringify(prev))
+      next[toDayIdx][toCategory]     = fromMeal
+      next[fromDayIdx][fromCategory] = toMeal || null
       persistPlan(next)
       return next
     })
@@ -115,6 +163,7 @@ export function PlanProvider({ children }) {
     setPrepChecked({})
     setUndoStack([])
     setPlanDesc(null)
+    setPrevPlanSnapshot(null)
   }, [])
 
   const clearPlan = useCallback(() => {
@@ -122,10 +171,10 @@ export function PlanProvider({ children }) {
     setPrepChecked({})
     setUndoStack([])
     setPlanDesc(null)
+    setPrevPlanSnapshot(null)
     try { sessionStorage.removeItem('mealplan_current') } catch {}
   }, [])
 
-  // Meal prep tracking
   const togglePrep = useCallback((dayIdx, category) => {
     const key = `${dayIdx}-${category}`
     setPrepChecked(prev => ({ ...prev, [key]: !prev[key] }))
@@ -149,9 +198,10 @@ export function PlanProvider({ children }) {
   return (
     <PlanContext.Provider value={{
       weeklyPlan, generating, dietTypes, expandedDay, servings,
-      prepChecked, undoStack, planDesc,
-      setDietTypes, setExpandedDay, setPlanDesc, setServings,
-      generate, regenerateDay, swapMeal, undoSwap, clearUndo,
+      prepChecked, undoStack, planDesc, avoidRepeats, prevPlanSnapshot,
+      setDietTypes, setExpandedDay, setPlanDesc, setServings, setAvoidRepeats,
+      generate, regenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
+      undoGenerate, clearUndoGenerate,
       loadPlan, clearPlan, togglePrep, isPrepDone, prepProgress,
     }}>
       {children}

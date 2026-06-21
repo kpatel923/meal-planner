@@ -275,3 +275,86 @@ ALTER TABLE public.saved_plans ADD COLUMN IF NOT EXISTS servings INTEGER DEFAULT
 ALTER TABLE public.shared_plans ADD COLUMN IF NOT EXISTS servings INTEGER DEFAULT 2;
 
 CREATE INDEX IF NOT EXISTS meals_source_idx ON public.meals(source);
+
+
+-- ============================================================
+-- SCHEMA UPDATE: v11 — Nutrition, Budget, Photos, Ratings
+-- Run this block in Supabase SQL Editor
+-- ============================================================
+
+-- Nutrition fields on meals
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS calories     INTEGER;
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS protein_g    NUMERIC(6,1);
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS carbs_g      NUMERIC(6,1);
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS fat_g        NUMERIC(6,1);
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS fiber_g      NUMERIC(6,1);
+
+-- Budget fields on meals
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS cost_per_serving NUMERIC(8,2);
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS budget_tag   TEXT DEFAULT 'medium'
+  CHECK (budget_tag IN ('budget','medium','premium'));
+
+-- Photo storage
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS photo_url TEXT;
+
+-- Meal ratings (1-5 stars, set after eating)
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS rating       NUMERIC(2,1) CHECK (rating BETWEEN 1 AND 5);
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS times_used   INTEGER DEFAULT 0;
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS last_used_at TIMESTAMPTZ;
+
+-- Weekly budget preference on profile
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS weekly_budget NUMERIC(8,2);
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS budget_mode   BOOLEAN DEFAULT false;
+
+-- Onboarding completion flag
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS onboarding_done BOOLEAN DEFAULT false;
+
+-- Meal history for avoid-repeats logic
+CREATE TABLE IF NOT EXISTS public.meal_history (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  meal_id      UUID REFERENCES public.meals(id) ON DELETE SET NULL,
+  meal_name    TEXT NOT NULL,
+  used_on_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE public.meal_history ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "history_own" ON public.meal_history
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS meal_history_user_idx ON public.meal_history(user_id);
+CREATE INDEX IF NOT EXISTS meal_history_date_idx ON public.meal_history(user_id, used_on_date DESC);
+CREATE INDEX IF NOT EXISTS meals_rating_idx      ON public.meals(user_id, rating DESC);
+CREATE INDEX IF NOT EXISTS meals_times_used_idx  ON public.meals(user_id, times_used DESC);
+
+-- Storage bucket for meal photos
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('meal-photos', 'meal-photos', true)
+ON CONFLICT DO NOTHING;
+
+CREATE POLICY "meal_photos_upload" ON storage.objects
+  FOR INSERT WITH CHECK (
+    bucket_id = 'meal-photos' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+CREATE POLICY "meal_photos_select_public" ON storage.objects
+  FOR SELECT USING (bucket_id = 'meal-photos');
+CREATE POLICY "meal_photos_delete" ON storage.objects
+  FOR DELETE USING (
+    bucket_id = 'meal-photos' AND
+    auth.uid()::text = (storage.foldername(name))[1]
+  );
+
+
+-- ============================================================
+-- SCHEMA UPDATE: v11b — Public Recipe Sharing
+-- Run this block in Supabase SQL Editor
+-- ============================================================
+
+-- Allow public (unauthenticated) read access to a single meal by id,
+-- ONLY when is_public is true. Existing private meals stay protected
+-- by the original RLS policy (owner-only).
+ALTER TABLE public.meals ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT false;
+
+CREATE POLICY "meals_public_read" ON public.meals
+  FOR SELECT USING (is_public = true);

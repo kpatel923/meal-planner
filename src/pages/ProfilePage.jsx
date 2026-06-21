@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { useTheme } from '../hooks/useTheme'
 import { useMeals } from '../hooks/useMeals'
 import { usePlans } from '../hooks/usePlans'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
-import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users } from 'lucide-react'
+import { getMostUsedMeals } from '../lib/avoidRepeats'
+import { weeklyBudgetTotal, budgetToTier, formatCost, BUDGET_TAG_STYLES } from '../lib/budget'
+import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, TrendingUp, DollarSign, Award } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
@@ -20,7 +22,7 @@ export default function ProfilePage() {
   const { isDark, toggle } = useTheme()
   const { meals }  = useMeals()
   const { plans }  = usePlans()
-  const { servings: liveServings, setServings: setLiveServings } = usePlanStore()
+  const { servings: liveServings, setServings: setLiveServings, weeklyPlan } = usePlanStore()
   const navigate   = useNavigate()
 
   const [editingName,  setEditingName]  = useState(false)
@@ -28,13 +30,26 @@ export default function ProfilePage() {
   const [savingName,   setSavingName]   = useState(false)
   const [savingPrefs,  setSavingPrefs]  = useState(false)
   const [savingServ,   setSavingServ]   = useState(false)
+  const [savingBudget, setSavingBudget] = useState(false)
   const [dietPrefs,    setDietPrefs]    = useState(profile?.diet_prefs || ['veg','vegan','nonveg'])
   const [servings,     setServingsLocal] = useState(profile?.default_servings || liveServings || 2)
+  const [budgetMode,   setBudgetModeLocal] = useState(profile?.budget_mode || false)
+  const [weeklyBudget, setWeeklyBudgetLocal] = useState(profile?.weekly_budget || 75)
+  const [mostUsed,     setMostUsed]     = useState([])
+  const [loadingUsage, setLoadingUsage] = useState(true)
 
   const initials = (profile?.username || user?.email || 'U').charAt(0).toUpperCase()
   const joinDate = user?.created_at
     ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
     : '—'
+
+  useEffect(() => {
+    if (!user?.id) return
+    getMostUsedMeals(user.id, 10).then(data => {
+      setMostUsed(data)
+      setLoadingUsage(false)
+    })
+  }, [user?.id])
 
   async function handleSaveName() {
     if (!nameValue.trim()) return
@@ -70,11 +85,24 @@ export default function ProfilePage() {
     setSavingServ(false)
   }
 
+  async function handleSaveBudget() {
+    setSavingBudget(true)
+    const { error } = await updateProfile({ budget_mode: budgetMode, weekly_budget: weeklyBudget })
+    if (error) toast.error('Could not save budget settings')
+    else toast.success('Budget settings saved!')
+    setSavingBudget(false)
+  }
+
   function toggleDiet(key) {
     setDietPrefs(p => p.includes(key) ? p.filter(d => d !== key) : [...p, key])
   }
 
   async function handleSignOut() { await signOut(); navigate('/auth') }
+
+  // Budget comparison: what tier does this weekly budget land in, and what's the live plan costing?
+  const suggestedTier = budgetToTier(weeklyBudget, servings)
+  const tierStyle = suggestedTier ? BUDGET_TAG_STYLES[suggestedTier] : null
+  const currentPlanCost = weeklyPlan ? weeklyBudgetTotal(weeklyPlan, servings) : null
 
   return (
     <div className="page-container" style={{ animation: 'fadeIn 0.35s ease', maxWidth: '680px' }}>
@@ -219,6 +247,101 @@ export default function ProfilePage() {
           {savingServ ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
           Save household size
         </button>
+      </div>
+
+      {/* ── Budget mode ───────────────────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.18s both' }}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold flex items-center gap-2" style={{ fontSize: '16px', color: 'var(--text)' }}>
+            <DollarSign size={16} style={{ color: 'var(--brand)' }} /> Budget mode
+          </h3>
+          <button onClick={() => setBudgetModeLocal(v => !v)}
+            className="relative rounded-full transition-all duration-300 tap-target"
+            style={{ width: '52px', height: '30px', background: budgetMode ? 'var(--brand)' : 'var(--border)' }}>
+            <div className="absolute top-1 rounded-full bg-white shadow-md transition-transform duration-300"
+              style={{ width: '22px', height: '22px', left: '4px', transform: budgetMode ? 'translateX(22px)' : 'translateX(0)' }} />
+          </button>
+        </div>
+        <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '20px' }}>
+          Set a weekly grocery budget — we'll suggest meals that fit and show you how your current plan compares.
+        </p>
+
+        {budgetMode && (
+          <div style={{ animation: 'slideDown 0.3s ease' }}>
+            <label className="input-label">Weekly budget</label>
+            <div className="flex items-center gap-3 mb-4">
+              <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text)' }}>$</span>
+              <input type="number" min="10" max="500" step="5" className="input" style={{ width: '120px' }}
+                value={weeklyBudget} onChange={e => setWeeklyBudgetLocal(Math.max(10, Number(e.target.value) || 0))} />
+              <span style={{ fontSize: '13px', color: 'var(--text-3)' }}>/ week for {servings} {servings === 1 ? 'person' : 'people'}</span>
+            </div>
+
+            {/* Outcome comparison */}
+            {tierStyle && (
+              <div className="p-4 rounded-2xl mb-4" style={{ background: tierStyle.bg, border: `1px solid ${tierStyle.color}30` }}>
+                <p style={{ fontSize: '13px', color: tierStyle.color, fontWeight: 600 }}>
+                  {tierStyle.emoji} At ${weeklyBudget}/week, you'll mostly eat <strong>{tierStyle.label.toLowerCase()}</strong> meals
+                  {suggestedTier === 'budget' && ' — lots of room for variety!'}
+                  {suggestedTier === 'medium' && ' — a good balance of variety and cost.'}
+                  {suggestedTier === 'premium' && ' — premium ingredients fit comfortably.'}
+                </p>
+              </div>
+            )}
+
+            {currentPlanCost && (
+              <div className="flex items-center justify-between p-4 rounded-2xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                <div>
+                  <p style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Current plan costs</p>
+                  <p className="font-display font-bold" style={{ fontSize: '20px', color: 'var(--text)' }}>{formatCost(currentPlanCost.total)}</p>
+                </div>
+                <div className="text-right">
+                  <p style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>vs target</p>
+                  <p className="font-semibold" style={{ fontSize: '14px', color: currentPlanCost.total <= weeklyBudget ? 'var(--brand)' : '#D4502A' }}>
+                    {currentPlanCost.total <= weeklyBudget ? '✓ Under budget' : `+${formatCost(currentPlanCost.total - weeklyBudget)} over`}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <button onClick={handleSaveBudget} disabled={savingBudget} className="btn-primary btn tap-target mt-4">
+          {savingBudget ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Save budget settings
+        </button>
+      </div>
+
+      {/* ── Most-used meals ───────────────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.19s both' }}>
+        <h3 className="font-semibold mb-1 flex items-center gap-2" style={{ fontSize: '16px', color: 'var(--text)' }}>
+          <Award size={16} style={{ color: 'var(--brand)' }} /> Most-used meals
+        </h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '18px' }}>
+          Your top meals from generated plans — what you actually eat most.
+        </p>
+
+        {loadingUsage ? (
+          <div className="space-y-2">
+            {[...Array(3)].map((_,i) => <div key={i} className="skeleton rounded-xl" style={{ height: '44px' }} />)}
+          </div>
+        ) : mostUsed.length === 0 ? (
+          <p style={{ fontSize: '13.5px', color: 'var(--text-3)', textAlign: 'center', padding: '20px 0' }}>
+            Generate a few weekly plans and your favorites will show up here.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {mostUsed.map((m, i) => (
+              <div key={m.meal_name} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--surface-2)' }}>
+                <span className="flex items-center justify-center font-bold rounded-lg shrink-0"
+                  style={{ width: '26px', height: '26px', fontSize: '12px', background: i < 3 ? 'rgba(31,158,98,0.15)' : 'var(--surface)', color: i < 3 ? 'var(--brand)' : 'var(--text-3)' }}>
+                  {i + 1}
+                </span>
+                <span className="flex-1 font-medium" style={{ fontSize: '14px', color: 'var(--text)' }}>{m.meal_name}</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: 600 }}>{m.count}×</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Data export ───────────────────────────────── */}

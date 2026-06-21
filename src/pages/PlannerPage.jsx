@@ -9,11 +9,12 @@ import { DAYS, CATEGORIES, DIET_LABELS } from '../lib/mealLogic'
 import { exportToPDF } from '../lib/pdfExport'
 import { buildPlanShareText, buildShareableURL, shareText } from '../lib/sharing'
 import { generatePlanDescription } from '../lib/aiFeatures'
+import { weeklyNutritionTotals, nutritionColor } from '../lib/nutrition'
 import {
   Download, Save, ChevronDown, ChevronUp, Loader2, Sparkles,
   AlertCircle, X, ArrowLeftRight, RotateCcw, Play, Camera,
   ExternalLink, RefreshCw, CheckCircle2, Circle, Share2,
-  Link, Undo2, Wand2, ChefHat, Users
+  Link, Undo2, Wand2, ChefHat, Users, Printer, Flame
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -37,7 +38,7 @@ function getLinkMeta(url) {
   return { icon: <ExternalLink size={13} />, label: 'View Recipe', color: 'var(--brand)' }
 }
 
-function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep, dayIdx }) {
+function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep, dayIdx, onDragStart, onDragOver, onDrop, isDragTarget }) {
   const [flipped, setFlipped] = useState(false)
   const style   = CAT_STYLES[category]
   const diet    = meal ? DIET_LABELS[meal.diet_type] : null
@@ -50,7 +51,11 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
   return (
     <div className="flip-card-outer" style={{ height: cardHeight, marginTop: '10px' }}>
       <div className={`flip-card-wrapper ${flipped ? 'flipped' : ''}`}
-        style={{ height: cardHeight }}
+        style={{ height: cardHeight, outline: isDragTarget ? '2px dashed var(--brand)' : 'none', outlineOffset: '2px', borderRadius: '18px' }}
+        draggable={!!meal}
+        onDragStart={e => { e.stopPropagation(); onDragStart && onDragStart() }}
+        onDragOver={e => { e.preventDefault(); onDragOver && onDragOver() }}
+        onDrop={e => { e.preventDefault(); onDrop && onDrop() }}
         onClick={() => meal && setFlipped(f => !f)}>
         <div className="flip-card-inner" style={{ height: cardHeight }}>
 
@@ -177,13 +182,15 @@ function MealFlipCard({ meal, category, isDark, onSwap, isPrepDone, onTogglePrep
 }
 
 export default function PlannerPage() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const { isDark }  = useTheme()
   const navigate    = useNavigate()
   const {
     weeklyPlan, generating, dietTypes, expandedDay, undoStack, planDesc, servings,
-    setDietTypes, setExpandedDay, setPlanDesc, setServings,
-    generate, regenerateDay, swapMeal, undoSwap, clearUndo,
+    avoidRepeats, prevPlanSnapshot,
+    setDietTypes, setExpandedDay, setPlanDesc, setServings, setAvoidRepeats,
+    generate, regenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
+    undoGenerate, clearUndoGenerate,
     clearPlan, togglePrep, isPrepDone, prepProgress,
   } = usePlanStore()
   const { savePlan } = usePlans()
@@ -197,6 +204,7 @@ export default function PlannerPage() {
   const [shareType,      setShareType]      = useState('plan') // 'plan' | 'grocery'
   const [loadingDesc,    setLoadingDesc]    = useState(false)
   const [regenDay,       setRegenDay]       = useState(null)  // dayIdx being regenerated
+  const [dragSlot,       setDragSlot]       = useState(null)  // { dayIdx, category } currently dragged
 
   const { meals: allMeals,      loading: mealsLoading } = useMeals()
   const { meals: filteredMeals }                        = useMeals({ diet_types: dietTypes })
@@ -210,7 +218,7 @@ export default function PlannerPage() {
     if (weeklyPlan && !confirmRegen) { setConfirmRegen(true); return }
     setConfirmRegen(false)
     try {
-      const plan = await generate(filteredMeals)
+      const plan = await generate(filteredMeals, user?.id)
       toast.success('Week generated!')
       // Auto-generate AI description
       fetchAIDescription(plan)
@@ -293,7 +301,7 @@ export default function PlannerPage() {
   return (
     <div className="page-container" style={{ animation:'fadeIn 0.35s ease-out' }}>
 
-      {/* ── Undo Toast ─────────────────────────────────────── */}
+      {/* ── Undo Toast (swap or generate, mutually exclusive) ── */}
       {undoStack.length > 0 && (
         <div className="fixed bottom-28 lg:bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lifted"
           style={{ background:'var(--surface)', border:'1.5px solid var(--border)', animation:'slideUp 0.3s ease', whiteSpace:'nowrap' }}>
@@ -301,11 +309,27 @@ export default function PlannerPage() {
             Swapped to <strong>{undoStack[0]?.newMeal?.item_name}</strong>
           </span>
           <button onClick={undoSwap}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all hover:opacity-80"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all hover:opacity-80 tap-target"
             style={{ fontSize:'13px', background:'var(--brand)', color:'#fff' }}>
             <Undo2 size={13} /> Undo
           </button>
-          <button onClick={clearUndo} style={{ color:'var(--text-3)' }}>
+          <button onClick={clearUndo} style={{ color:'var(--text-3)' }} className="tap-target">
+            <X size={15} />
+          </button>
+        </div>
+      )}
+      {undoStack.length === 0 && prevPlanSnapshot && (
+        <div className="fixed bottom-28 lg:bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-lifted"
+          style={{ background:'var(--surface)', border:'1.5px solid var(--border)', animation:'slideUp 0.3s ease', whiteSpace:'nowrap' }}>
+          <span style={{ fontSize:'14px', color:'var(--text)' }}>
+            Week regenerated
+          </span>
+          <button onClick={undoGenerate}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold transition-all hover:opacity-80 tap-target"
+            style={{ fontSize:'13px', background:'var(--brand)', color:'#fff' }}>
+            <Undo2 size={13} /> Undo
+          </button>
+          <button onClick={clearUndoGenerate} style={{ color:'var(--text-3)' }} className="tap-target">
             <X size={15} />
           </button>
         </div>
@@ -323,14 +347,17 @@ export default function PlannerPage() {
           </p>
         </div>
         {weeklyPlan && (
-          <div className="flex gap-2.5 flex-wrap">
-            <button onClick={() => handleShare('plan')} className="btn-secondary btn gap-2">
+          <div className="flex gap-2.5 flex-wrap no-print">
+            <button onClick={() => handleShare('plan')} className="btn-secondary btn gap-2 tap-target">
               <Share2 size={16} /> Share
             </button>
-            <button onClick={() => exportToPDF(weeklyPlan, profile?.username)} className="btn-secondary btn gap-2">
+            <button onClick={() => window.print()} className="btn-secondary btn gap-2 tap-target">
+              <Printer size={16} /> Print
+            </button>
+            <button onClick={() => exportToPDF(weeklyPlan, profile?.username)} className="btn-secondary btn gap-2 tap-target">
               <Download size={16} /> PDF
             </button>
-            <button onClick={() => navigate('/grocery')} className="btn-secondary btn gap-2">
+            <button onClick={() => navigate('/grocery')} className="btn-secondary btn gap-2 tap-target">
               🛒 Grocery
             </button>
           </div>
@@ -364,6 +391,17 @@ export default function PlannerPage() {
               <span className="stepper-value">{servings}</span>
               <button onClick={() => setServings(servings + 1)} disabled={servings >= 20} className="stepper-btn" style={{ opacity: servings >= 20 ? 0.3 : 1 }}>+</button>
             </div>
+          </div>
+
+          {/* Avoid repeats toggle */}
+          <div>
+            <p className="input-label mb-3 flex items-center gap-1.5"><RefreshCw size={11} /> Avoid repeats</p>
+            <button onClick={() => setAvoidRepeats(v => !v)}
+              className="relative rounded-full transition-all duration-300 tap-target"
+              style={{ width:'52px', height:'30px', background: avoidRepeats ? 'var(--brand)' : 'var(--border)' }}>
+              <div className="absolute top-1 rounded-full bg-white shadow-md transition-transform duration-300"
+                style={{ width:'22px', height:'22px', left:'4px', transform: avoidRepeats ? 'translateX(22px)' : 'translateX(0)' }} />
+            </button>
           </div>
 
           <div className="sm:ml-auto flex gap-2.5 flex-wrap items-center">
@@ -426,6 +464,39 @@ export default function PlannerPage() {
           </div>
         </div>
       )}
+
+      {/* ── Weekly Nutrition Summary ──────────────────────────── */}
+      {weeklyPlan && (() => {
+        const { perDay, totals, mealCount } = weeklyNutritionTotals(weeklyPlan, servings)
+        if (!mealCount || !perDay?.calories) return null
+        return (
+          <div className="card p-5 mb-6" style={{ animation:'slideUp 0.4s ease 0.13s both' }}>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-semibold flex items-center gap-2" style={{ fontSize:'14px', color:'var(--text)' }}>
+                <Flame size={15} style={{ color: nutritionColor(perDay.calories) }} /> Weekly Nutrition (avg/day)
+              </p>
+              <span style={{ fontSize:'11px', color:'var(--text-3)' }}>Estimated</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {[
+                { label:'Calories', val: perDay.calories,  unit:'',  icon:'🔥' },
+                { label:'Protein',  val: perDay.protein_g,  unit:'g', icon:'🥩' },
+                { label:'Carbs',    val: perDay.carbs_g,    unit:'g', icon:'🍞' },
+                { label:'Fat',      val: perDay.fat_g,      unit:'g', icon:'🥑' },
+                { label:'Fiber',    val: perDay.fiber_g,    unit:'g', icon:'🌾' },
+              ].map(({ label, val, unit, icon }) => (
+                <div key={label} className="text-center p-3 rounded-2xl" style={{ background:'var(--surface-2)', border:'1px solid var(--border)' }}>
+                  <p style={{ fontSize:'18px', marginBottom:'2px' }}>{icon}</p>
+                  <p className="font-display font-bold" style={{ fontSize:'17px', color:'var(--text)', letterSpacing:'-0.02em' }}>
+                    {val}{unit}
+                  </p>
+                  <p style={{ fontSize:'10px', color:'var(--text-3)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── Empty State ─────────────────────────────────────── */}
       {!weeklyPlan && (
@@ -544,7 +615,7 @@ export default function PlannerPage() {
                     <p className="mt-3 mb-1 flex items-center gap-1.5"
                       style={{ fontSize:'11px', color:'var(--text-3)', fontWeight:600 }}>
                       <RotateCcw size={11} />
-                      Click a card to flip — see all ingredients and recipe link on the back
+                      Click a card to flip · drag a card to move it to a different slot
                     </p>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                       {CATEGORIES.map(category => (
@@ -556,6 +627,16 @@ export default function PlannerPage() {
                           isPrepDone={isPrepDone(dayIdx, category)}
                           onTogglePrep={() => togglePrep(dayIdx, category)}
                           dayIdx={dayIdx}
+                          onDragStart={() => setDragSlot({ dayIdx, category })}
+                          onDragOver={() => {}}
+                          isDragTarget={dragSlot && (dragSlot.dayIdx !== dayIdx || dragSlot.category !== category)}
+                          onDrop={() => {
+                            if (dragSlot && (dragSlot.dayIdx !== dayIdx || dragSlot.category !== category)) {
+                              reorderMeal(dragSlot.dayIdx, dragSlot.category, dayIdx, category)
+                              toast.success('Meals swapped!', { icon: '🔀' })
+                            }
+                            setDragSlot(null)
+                          }}
                         />
                       ))}
                     </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useMeals } from '../hooks/useMeals'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { useAuth } from '../hooks/useAuth'
@@ -6,7 +6,7 @@ import { getMealSuggestions } from '../lib/aiFeatures'
 import {
   Sparkles, Loader2, Plus, RefreshCw, ChefHat,
   X, Edit2, Check, BookOpen, Globe, Layers,
-  Play, FileText, Users, Info
+  Play, FileText, Users, Info, Mic
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -152,6 +152,46 @@ export default function AISuggestionsPage() {
   const [suggestions,  setSuggestions]  = useState([])
   const [added,        setAdded]        = useState({})       // { name: true } once added
   const [reviewTarget, setReviewTarget] = useState(null)     // suggestion being reviewed
+  const [listening,    setListening]    = useState(false)
+  const recognitionRef = useRef(null)
+  const voiceSupported  = typeof window !== 'undefined' &&
+    (window.SpeechRecognition || window.webkitSpeechRecognition)
+
+  // Set up the Web Speech API recognizer once
+  useEffect(() => {
+    if (!voiceSupported) return
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    const recognition = new SpeechRecognition()
+    recognition.continuous     = false
+    recognition.interimResults = false
+    recognition.lang           = 'en-US'
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript
+      setIngredients(prev => prev ? `${prev}, ${transcript}` : transcript)
+    }
+    recognition.onerror = () => {
+      setListening(false)
+      toast.error('Could not hear you — try again')
+    }
+    recognition.onend = () => setListening(false)
+
+    recognitionRef.current = recognition
+    return () => recognition.abort()
+  }, [voiceSupported])
+
+  function toggleListening() {
+    if (!recognitionRef.current) return
+    if (listening) {
+      recognitionRef.current.stop()
+      setListening(false)
+    } else {
+      try {
+        recognitionRef.current.start()
+        setListening(true)
+      } catch { /* already started, ignore */ }
+    }
+  }
 
   // Use saved diet prefs from profile, fall back to all
   const dietPreferences = profile?.diet_prefs?.length
@@ -259,7 +299,22 @@ export default function AISuggestionsPage() {
 
         {/* Ingredient input */}
         <div className="mb-4">
-          <label className="input-label">What do you have?</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="input-label" style={{ marginBottom: 0 }}>What do you have?</label>
+            {voiceSupported && (
+              <button onClick={toggleListening} type="button"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all tap-target"
+                style={{
+                  fontSize: '12px',
+                  background: listening ? 'rgba(212,80,42,0.12)' : 'rgba(31,158,98,0.1)',
+                  color: listening ? '#D4502A' : 'var(--brand)',
+                  border: `1px solid ${listening ? 'rgba(212,80,42,0.25)' : 'rgba(31,158,98,0.2)'}`,
+                }}>
+                <Mic size={13} className={listening ? 'animate-pulse' : ''} />
+                {listening ? 'Listening…' : 'Speak'}
+              </button>
+            )}
+          </div>
           <textarea className="input resize-none" rows={3}
             placeholder="e.g. chicken breast, rice, garlic, onion, bell pepper, soy sauce…"
             value={ingredients} onChange={e => setIngredients(e.target.value)}

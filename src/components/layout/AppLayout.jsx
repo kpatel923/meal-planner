@@ -6,7 +6,7 @@ import Onboarding from '../Onboarding'
 import {
   CalendarDays, ShoppingCart, Bookmark,
   BookOpen, User, LogOut, ChefHat,
-  Sun, Moon, Sparkles, Users
+  Sun, Moon, Sparkles, Users, Menu, X, ChevronRight
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -19,21 +19,35 @@ const NAV_ITEMS = [
   { to: '/profile',   label: 'Profile',     icon: User         },
 ]
 
-// Mobile nav shows only the 5 most important items
 const MOBILE_NAV = [
-  { to: '/planner',   label: 'Planner',   icon: CalendarDays },
+  { to: '/planner',   label: 'Plan',      icon: CalendarDays },
   { to: '/grocery',   label: 'Grocery',   icon: ShoppingCart },
   { to: '/ai',        label: 'AI Chef',   icon: Sparkles     },
   { to: '/recipes',   label: 'Recipes',   icon: BookOpen     },
-  { to: '/profile',   label: 'Profile',   icon: User         },
+]
+
+const MORE_ITEMS = [
+  { to: '/saved',     label: 'Saved plans', icon: Bookmark },
+  { to: '/household', label: 'Household',   icon: Users    },
+  { to: '/profile',   label: 'Profile',     icon: User     },
 ]
 
 export default function AppLayout() {
   const { user, profile, signOut } = useAuth()
-  const [dismissedOnboarding, setDismissedOnboarding] = useState(false)
+  const ONBOARDING_DISMISS_KEY = 'mealplan_onboarding_dismissed'
+  const [dismissedOnboarding, setDismissedOnboarding] = useState(() => {
+    try { return localStorage.getItem(ONBOARDING_DISMISS_KEY) === 'true' } catch { return false }
+  })
   const showOnboarding = profile && profile.onboarding_done === false && !dismissedOnboarding
-  const { isDark, toggle }         = useTheme()
-  const navigate                   = useNavigate()
+  const { isDark, toggle } = useTheme()
+  const navigate = useNavigate()
+
+  function handleOnboardingComplete() {
+    try { localStorage.setItem(ONBOARDING_DISMISS_KEY, 'true') } catch {}
+    setDismissedOnboarding(true)
+  }
+
+  const [moreOpen, setMoreOpen] = useState(false)
 
   async function handleSignOut() { await signOut(); navigate('/auth') }
 
@@ -43,64 +57,42 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen flex flex-col lg:flex-row" style={{ background: 'var(--bg)' }}>
 
-      {/* ── Desktop Sidebar ─────────────────────────────────── */}
+      {/* ── Desktop Sidebar — flat, light surface, Apple Settings/Finder style ── */}
       <aside className="hidden lg:flex flex-col w-60 xl:w-64 shrink-0 h-screen sticky top-0"
         style={{
-          background: 'linear-gradient(175deg, #0D1A10 0%, #09100B 50%, #080806 100%)',
-          borderRight: '1px solid rgba(255,255,255,0.055)',
+          background: 'var(--surface)',
+          borderRight: '1px solid var(--border)',
         }}>
 
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 py-6"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.055)' }}>
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0"
-            style={{
-              background: 'linear-gradient(145deg, #27B872 0%, #0B4529 100%)',
-              boxShadow: '0 0 24px rgba(31,158,98,0.45), 0 1px 0 rgba(255,255,255,0.15) inset',
-            }}>
-            <ChefHat size={20} className="text-white" />
+        <div className="flex items-center gap-3 px-6 py-6">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: 'var(--brand)' }}>
+            <ChefHat size={18} className="text-white" />
           </div>
-          <div>
-            <p className="font-display font-semibold text-white"
-              style={{ fontSize: '17px', letterSpacing: '-0.04em', lineHeight: 1 }}>
-              MealPlan
-            </p>
-            <p style={{ fontSize: '11px', color: '#3A6648', marginTop: '3px' }}>
-              Your weekly kitchen
-            </p>
-          </div>
+          <p className="font-display font-semibold" style={{ fontSize: '16px', letterSpacing: '-0.03em', color: 'var(--text)' }}>
+            MealPlan
+          </p>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to}
-              className={({ isActive }) =>
-                `flex items-center gap-3.5 px-4 py-3 rounded-2xl font-medium transition-all duration-200 relative group ` +
-                (isActive ? 'text-white' : 'text-carbon-500 hover:text-white')
-              }
-              style={({ isActive }) => isActive ? {
-                background: 'linear-gradient(135deg, rgba(39,184,114,0.22) 0%, rgba(39,184,114,0.08) 100%)',
-                boxShadow: '0 0 0 1px rgba(39,184,114,0.3) inset, 0 4px 16px rgba(0,0,0,0.2)',
-              } : {}}>
+              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-medium transition-all duration-150 relative group">
               {({ isActive }) => (
                 <>
-                  {isActive && (
-                    <div className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-6 rounded-full"
-                      style={{ background: 'linear-gradient(180deg,#3AB87D,#1F9E62)', boxShadow: '0 0 8px rgba(58,184,125,0.6)' }} />
-                  )}
-                  <Icon size={18} strokeWidth={isActive ? 2.5 : 1.8}
-                    style={{ color: isActive ? '#3AB87D' : '#4A4238', flexShrink: 0, transition: 'color 0.2s ease' }}
-                    className="group-hover:!text-forest-400 transition-colors"
+                  <div className="absolute inset-0 rounded-xl transition-all duration-150"
+                    style={{ background: isActive ? 'var(--surface-3)' : 'transparent' }} />
+                  <Icon size={18} strokeWidth={isActive ? 2.3 : 1.8}
+                    style={{ color: isActive ? 'var(--brand)' : 'var(--text-2)', flexShrink: 0, position: 'relative' }}
                   />
-                  <span style={{ fontSize: '14px', letterSpacing: '-0.01em', color: isActive ? '#fff' : '#504840' }}
-                    className="group-hover:!text-white transition-colors">
+                  <span style={{ fontSize: '14px', letterSpacing: '-0.01em', color: isActive ? 'var(--text)' : 'var(--text-2)', fontWeight: isActive ? 600 : 500, position: 'relative' }}>
                     {label}
                   </span>
-                  {/* AI Chef badge */}
                   {to === '/ai' && (
-                    <span className="ml-auto text-white font-bold rounded-full px-1.5 py-0.5"
-                      style={{ fontSize: '9px', background: 'linear-gradient(135deg,#27B872,#0B4529)', letterSpacing: '0.05em' }}>
+                    <span className="ml-auto font-semibold rounded-full px-1.5 py-0.5 relative"
+                      style={{ fontSize: '9px', background: 'var(--brand)', color: '#fff', letterSpacing: '0.02em' }}>
                       NEW
                     </span>
                   )}
@@ -111,49 +103,37 @@ export default function AppLayout() {
         </nav>
 
         {/* Bottom — theme + user */}
-        <div className="px-3 pb-5 space-y-2"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.055)', paddingTop: '14px' }}>
+        <div className="px-3 pb-5 space-y-1.5" style={{ borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
 
-          {/* Theme toggle */}
           <button onClick={toggle}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-2xl transition-all duration-200 group"
-            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}>
-            <div className="w-7 h-7 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: isDark ? 'rgba(252,211,77,0.12)' : 'rgba(31,158,98,0.12)' }}>
-              {isDark
-                ? <Sun size={15} style={{ color: '#FCD34D' }} className="group-hover:rotate-90 transition-transform duration-500" />
-                : <Moon size={15} style={{ color: '#8F8678' }} />
-              }
-            </div>
-            <span style={{ fontSize: '13px', color: '#504840' }}
-              className="group-hover:text-white transition-colors">
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-150"
+            style={{ color: 'var(--text-2)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            {isDark ? <Sun size={17} /> : <Moon size={17} />}
+            <span style={{ fontSize: '14px', fontWeight: 500 }}>
               {isDark ? 'Light mode' : 'Dark mode'}
             </span>
           </button>
 
-          {/* User row */}
-          <div className="flex items-center gap-3 px-4 py-2.5 rounded-2xl"
-            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.04)' }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
-              style={{ background: 'linear-gradient(145deg,#27B872,#167D4D)', boxShadow: '0 2px 8px rgba(31,158,98,0.4)' }}>
+          <div className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl" style={{ background: 'var(--surface-2)' }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm shrink-0"
+              style={{ background: 'var(--brand)' }}>
               {initials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-medium truncate"
-                style={{ fontSize: '13px', color: '#C5BFB5', letterSpacing: '-0.01em' }}>
+              <p className="font-medium truncate" style={{ fontSize: '13px', color: 'var(--text)' }}>
                 {username}
               </p>
-              <p className="truncate" style={{ fontSize: '11px', color: '#3A3530' }}>
+              <p className="truncate" style={{ fontSize: '11px', color: 'var(--text-3)' }}>
                 {user?.email}
               </p>
             </div>
             <button onClick={handleSignOut} title="Sign out"
-              className="p-1.5 rounded-xl transition-all"
-              style={{ color: '#3A3530' }}
-              onMouseEnter={e => { e.currentTarget.style.color = '#D4502A'; e.currentTarget.style.background = 'rgba(212,80,42,0.1)' }}
-              onMouseLeave={e => { e.currentTarget.style.color = '#3A3530'; e.currentTarget.style.background = 'transparent' }}>
+              className="p-1.5 rounded-lg transition-all"
+              style={{ color: 'var(--text-3)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--danger)' }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--text-3)' }}>
               <LogOut size={14} />
             </button>
           </div>
@@ -167,48 +147,83 @@ export default function AppLayout() {
 
       {/* ── Mobile bottom nav ────────────────────────────────── */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 glass safe-bottom"
-        style={{
-          background: isDark ? 'rgba(12,11,9,0.95)' : 'rgba(255,255,255,0.95)',
-          borderTop:  `1px solid ${isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)'}`,
-        }}>
+        style={{ borderTop: '1px solid var(--border)' }}>
         <div className="flex items-stretch">
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to}
               className="flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200">
               {({ isActive }) => (
                 <>
-                  <div className="relative p-1.5 rounded-2xl transition-all duration-200"
-                    style={{
-                      background: isActive
-                        ? isDark ? 'rgba(58,184,125,0.18)' : 'rgba(31,158,98,0.12)'
-                        : 'transparent',
-                      transform: isActive ? 'scale(1.1)' : 'scale(1)',
-                    }}>
-                    <Icon size={21} strokeWidth={isActive ? 2.5 : 1.7}
+                  <div className="relative" style={{ transform: isActive ? 'scale(1.08)' : 'scale(1)', transition: 'transform 0.2s ease' }}>
+                    <Icon size={21} strokeWidth={isActive ? 2.4 : 1.7}
                       style={{ color: isActive ? 'var(--brand)' : 'var(--text-3)' }} />
-                    {isActive && (
-                      <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
-                        style={{ background: 'var(--brand)' }} />
-                    )}
-                    {/* AI badge on mobile */}
                     {to === '/ai' && !isActive && (
-                      <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
+                      <div className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full"
                         style={{ background: 'var(--brand)' }} />
                     )}
                   </div>
-                  <span className="font-semibold uppercase"
-                    style={{ fontSize: '9px', letterSpacing: '0.07em', color: isActive ? 'var(--brand)' : 'var(--text-3)' }}>
+                  <span className="font-medium" style={{ fontSize: '10px', letterSpacing: '-0.005em', color: isActive ? 'var(--brand)' : 'var(--text-3)' }}>
                     {label}
                   </span>
                 </>
               )}
             </NavLink>
           ))}
+          <button onClick={() => setMoreOpen(true)}
+            className="flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200">
+            <div className="relative" style={{ transform: moreOpen ? 'scale(1.08)' : 'scale(1)', transition: 'transform 0.2s ease' }}>
+              <Menu size={21} strokeWidth={moreOpen ? 2.4 : 1.7}
+                style={{ color: moreOpen ? 'var(--brand)' : 'var(--text-3)' }} />
+            </div>
+            <span className="font-medium" style={{ fontSize: '10px', letterSpacing: '-0.005em', color: moreOpen ? 'var(--brand)' : 'var(--text-3)' }}>
+              More
+            </span>
+          </button>
         </div>
       </nav>
 
-      {/* Onboarding overlay — shows once for new users */}
-      {showOnboarding && <Onboarding onComplete={() => setDismissedOnboarding(true)} />}
+      {/* ── Mobile "More" sheet ──────────────────────────────── */}
+      {moreOpen && (
+        <div className="lg:hidden">
+          <div className="sheet-backdrop" onClick={() => setMoreOpen(false)} />
+          <div className="sheet-panel" role="dialog" aria-modal="true" aria-label="More">
+            <div className="sheet-grip" />
+            <div className="flex items-center justify-between px-5 pt-1 pb-3">
+              <h3 className="font-display font-semibold" style={{ fontSize: 16, color: 'var(--text)' }}>More</h3>
+              <button onClick={() => setMoreOpen(false)} aria-label="Close"
+                className="flex items-center justify-center rounded-lg tap-target"
+                style={{ width: 32, height: 32, color: 'var(--text-3)' }}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-3 pb-5">
+              {MORE_ITEMS.map(({ to, label, icon: Icon }) => (
+                <NavLink key={to} to={to} onClick={() => setMoreOpen(false)}
+                  className="flex items-center gap-3 px-3 py-3.5 rounded-xl tap-target transition-all"
+                  style={{ color: 'var(--text)' }}>
+                  <Icon size={19} style={{ color: 'var(--text-3)' }} />
+                  <span style={{ fontSize: 14.5, fontWeight: 500, flex: 1 }}>{label}</span>
+                  <ChevronRight size={16} style={{ color: 'var(--text-3)' }} />
+                </NavLink>
+              ))}
+              <button onClick={() => { toggle(); }}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl tap-target transition-all"
+                style={{ color: 'var(--text)' }}>
+                {isDark ? <Sun size={19} style={{ color: 'var(--text-3)' }} /> : <Moon size={19} style={{ color: 'var(--text-3)' }} />}
+                <span style={{ fontSize: 14.5, fontWeight: 500, flex: 1, textAlign: 'left' }}>{isDark ? 'Light mode' : 'Dark mode'}</span>
+              </button>
+              <button onClick={() => { setMoreOpen(false); handleSignOut(); }}
+                className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl tap-target transition-all"
+                style={{ color: 'var(--danger)' }}>
+                <LogOut size={19} />
+                <span style={{ fontSize: 14.5, fontWeight: 500, flex: 1, textAlign: 'left' }}>Sign out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showOnboarding && <Onboarding onComplete={handleOnboardingComplete} />}
     </div>
   )
 }

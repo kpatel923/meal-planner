@@ -11,7 +11,13 @@ const FEATURES = [
   { icon: '📄', title: 'Export everything',      desc: 'Download your plan as a PDF or export all recipes as JSON / CSV' },
 ]
 
-const FOOD_ITEMS = ['🥑','🍳','🥗','🍝','🥘','🍱','🫕','🥙','🍲','🫐']
+const PREVIEW_DAYS = [
+  { d:'M', meals:['🍳','🍝'] },
+  { d:'T', meals:['🥗','🍜'] },
+  { d:'W', meals:['🍳','🌮'], today:true },
+  { d:'T', meals:['🍓','🍗'] },
+  { d:'F', meals:['🥑','🍝'] },
+]
 
 export default function AuthPage() {
   const { signIn, signUp, signInWithGoogle } = useAuth()
@@ -55,75 +61,80 @@ export default function AuthPage() {
         </div>
       )}
 
-      {/* ── LEFT PANEL ─────────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col w-1/2 relative overflow-hidden"
-        style={{ background: 'linear-gradient(155deg, #071A0E 0%, #0C0B09 75%)' }}>
-
-        {/* Floating food emojis */}
-        {FOOD_ITEMS.map((emoji, i) => (
-          <div key={i} className="absolute select-none pointer-events-none"
-            style={{
-              top:    `${[8,22,38,54,68,82,14,46,72,90][i]}%`,
-              left:   `${[12,72,28,85,18,65,48,92,38,78][i]}%`,
-              fontSize: `${[36,44,32,40,48,34,42,30,46,36][i]}px`,
-              opacity: 0.07,
-              animation: `float ${3.5 + i * 0.35}s ease-in-out ${i * 0.4}s infinite`,
-            }}>
-            {emoji}
-          </div>
-        ))}
-
-        {/* Ambient glow */}
-        <div className="absolute pointer-events-none"
-          style={{ top:'30%', left:'40%', width:'400px', height:'400px', borderRadius:'50%',
-            background:'radial-gradient(circle, rgba(31,158,98,0.13) 0%, transparent 70%)',
-            transform:'translate(-50%,-50%)' }} />
+      {/* ── LEFT PANEL — uses the real day-strip as the visual, not generic decoration ── */}
+      <div className="hidden lg:flex flex-col w-1/2 relative overflow-hidden" style={{ background: 'var(--surface-2)' }}>
 
         {/* Logo */}
         <div className="relative z-10 flex items-center gap-3 px-10 pt-10">
           <div className="w-11 h-11 rounded-2xl flex items-center justify-center"
-            style={{ background:'linear-gradient(145deg,#27B872,#0B4529)', boxShadow:'0 0 24px rgba(31,158,98,0.45)' }}>
+            style={{ background:'var(--brand)' }}>
             <ChefHat size={22} className="text-white" />
           </div>
-          <span className="font-display font-semibold text-white" style={{ fontSize:'20px', letterSpacing:'-0.04em' }}>MealPlan</span>
+          <span className="font-display font-semibold" style={{ fontSize:'20px', letterSpacing:'-0.04em', color:'var(--text)' }}>MealPlan</span>
         </div>
 
         {/* Hero copy */}
         <div className="relative z-10 flex-1 flex flex-col justify-center px-10 py-12">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full mb-8 self-start"
-            style={{ background:'rgba(31,158,98,0.15)', border:'1px solid rgba(31,158,98,0.28)' }}>
-            <Sparkles size={13} style={{ color:'#3AB87D' }} />
-            <span style={{ fontSize:'12px', fontWeight:700, color:'#3AB87D', letterSpacing:'0.05em' }}>SMART MEAL PLANNING</span>
+            style={{ background:'var(--brand-light)' }}>
+            <Sparkles size={13} style={{ color:'var(--brand)' }} />
+            <span style={{ fontSize:'12px', fontWeight:700, color:'var(--brand-text)', letterSpacing:'0.05em' }}>SMART MEAL PLANNING</span>
           </div>
 
-          <h1 className="font-display font-semibold text-white mb-5 leading-[1.05]"
-            style={{ fontSize:'clamp(2.2rem,4.5vw,3.2rem)', letterSpacing:'-0.05em' }}>
+          <h1 className="font-display font-semibold mb-5 leading-[1.05]"
+            style={{ fontSize:'clamp(2.2rem,4.5vw,3.2rem)', letterSpacing:'-0.05em', color:'var(--text)' }}>
             Eat well,<br />
-            <span style={{ color:'#3AB87D' }}>every single week.</span>
+            <span style={{ color:'var(--brand)' }}>every single week.</span>
           </h1>
 
-          <p style={{ fontSize:'16px', color:'#4A6B56', lineHeight:'1.7', maxWidth:'380px', marginBottom:'40px' }}>
-            Your personal meal planner — smart plans, clean grocery lists, and all your recipes in one beautiful place.
+          <p style={{ fontSize:'16px', color:'var(--text-2)', lineHeight:'1.7', maxWidth:'380px', marginBottom:'36px' }}>
+            Your personal meal planner — smart plans, clean grocery lists, and all your recipes in one place.
           </p>
+
+          {/* Day-strip preview — the real signature element, not stock decoration */}
+          <div className="flex gap-2 mb-10">
+            {PREVIEW_DAYS.map((day, i) => (
+              <div key={i} className="flex flex-col items-center gap-2" style={{ animation:`slideUp 0.4s cubic-bezier(0.16,1,0.3,1) ${i*60}ms both` }}>
+                <div className="flex flex-col items-center justify-center rounded-lg"
+                  style={{
+                    width:'40px', height: day.today ? '46px' : '38px',
+                    background: day.today ? 'var(--brand)' : 'var(--surface)',
+                    border: day.today ? 'none' : '1px solid var(--border)',
+                    transform: day.today ? 'translateY(-4px)' : 'none',
+                    boxShadow: day.today ? '0 6px 16px rgba(255,90,54,0.3)' : 'none',
+                  }}>
+                  <span className="font-semibold" style={{ fontSize:'10px', color: day.today ? '#fff' : 'var(--text-3)' }}>{day.d}</span>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {day.meals.map((m, j) => (
+                    <div key={j} className="rounded-md flex items-center justify-center"
+                      style={{ width:'40px', height:'26px', background:'var(--surface)', border:'1px solid var(--border)', fontSize:'12px' }}>
+                      {m}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
 
           {/* Feature list */}
           <div className="space-y-4">
             {FEATURES.map(({ icon, title, desc }) => (
               <div key={title} className="flex items-start gap-4">
                 <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                  style={{ background:'rgba(31,158,98,0.1)', border:'1px solid rgba(31,158,98,0.18)' }}>
+                  style={{ background:'var(--brand-light)' }}>
                   {icon}
                 </div>
                 <div>
-                  <p className="font-semibold text-white" style={{ fontSize:'14px', letterSpacing:'-0.01em' }}>{title}</p>
-                  <p style={{ fontSize:'12px', color:'#4A6B56', lineHeight:'1.5', marginTop:'2px' }}>{desc}</p>
+                  <p className="font-semibold" style={{ fontSize:'14px', letterSpacing:'-0.01em', color:'var(--text)' }}>{title}</p>
+                  <p style={{ fontSize:'12px', color:'var(--text-2)', lineHeight:'1.5', marginTop:'2px' }}>{desc}</p>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <p className="relative z-10 px-10 pb-8" style={{ fontSize:'11px', color:'#2A3D30' }}>
+        <p className="relative z-10 px-10 pb-8" style={{ fontSize:'11px', color:'var(--text-3)' }}>
           © {new Date().getFullYear()} MealPlan — Free forever
         </p>
       </div>
@@ -135,7 +146,7 @@ export default function AuthPage() {
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-2.5 mb-10">
             <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background:'linear-gradient(145deg,#27B872,#0B4529)', boxShadow:'0 0 16px rgba(31,158,98,0.4)' }}>
+              style={{ background:'var(--brand)' }}>
               <ChefHat size={17} className="text-white" />
             </div>
             <span className="font-display font-semibold" style={{ fontSize:'18px', color:'var(--text)', letterSpacing:'-0.04em' }}>

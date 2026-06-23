@@ -4,9 +4,11 @@ import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 import { parseMealsFromFile, exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
 import { DIET_LABELS, CATEGORIES } from '../lib/mealLogic'
-import { estimateNutrition, nutritionColor } from '../lib/nutrition'
-import { estimateCost, getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
+import { nutritionColor } from '../lib/nutrition'
+import { getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
+import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { parseRecipeFromURL } from '../lib/aiFeatures'
+import RecipeDetailModal, { DIET_COLORS, SOURCE_BADGES, CAT_ICONS, getVideoMeta } from '../components/RecipeDetailModal'
 import {
   Plus, Search, Upload, Download, Edit2, Trash2,
   Loader2, X, BookOpen, AlertTriangle, ChevronDown,
@@ -17,209 +19,7 @@ import {
 import toast from 'react-hot-toast'
 
 const DIET_OPTIONS = ['veg','vegan','nonveg']
-const EMPTY = { item_name:'', category:'Breakfast', ingredients:'', diet_type:'veg', video_url:'', written_url:'', detail_notes:'', photo_url:'' }
-
-const DIET_COLORS = {
-  veg:    { bg:'rgba(31,158,98,0.1)',  text:'#1F9E62', border:'rgba(31,158,98,0.25)' },
-  vegan:  { bg:'rgba(11,96,59,0.12)', text:'#3AB87D', border:'rgba(58,184,125,0.25)' },
-  nonveg: { bg:'rgba(212,80,42,0.1)', text:'#D4502A', border:'rgba(212,80,42,0.25)' },
-}
-
-const SOURCE_BADGES = {
-  ai:     { label: 'AI', icon: <Sparkles size={10} />, bg: 'rgba(99,102,241,0.12)', text: '#6366F1' },
-  import: { label: 'Imported', icon: null, bg: 'rgba(245,158,11,0.12)', text: '#F59E0B' },
-}
-
-const CAT_ICONS = { Breakfast:'🍳', Lunch:'🥗', Dinner:'🍝', Snack:'🍎' }
-
-function getVideoMeta(url) {
-  if (!url) return null
-  if (url.includes('youtube') || url.includes('youtu.be')) return { icon: <Play size={14} />, label: 'Watch Video', platform: 'YouTube', color: '#FF0000' }
-  if (url.includes('instagram')) return { icon: <Camera size={14} />, label: 'Watch Video', platform: 'Instagram', color: '#E1306C' }
-  if (url.includes('tiktok')) return { icon: <Play size={14} />, label: 'Watch Video', platform: 'TikTok', color: '#000000' }
-  return { icon: <Play size={14} />, label: 'Watch Video', platform: 'Video', color: 'var(--brand)' }
-}
-
-// ── Recipe Detail Modal ──────────────────────────────────────────────
-function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
-  if (!meal) return null
-  const [sharing, setSharing] = useState(false)
-  const dc = DIET_COLORS[meal.diet_type] || DIET_COLORS.veg
-  const videoMeta = getVideoMeta(meal.video_url)
-  const ingredients = meal.ingredients?.split(',').map(i => i.trim()).filter(Boolean) || []
-  const sourceBadge = SOURCE_BADGES[meal.source]
-
-  const nutrition = meal.calories != null
-    ? { calories: meal.calories, protein_g: meal.protein_g, carbs_g: meal.carbs_g, fat_g: meal.fat_g, fiber_g: meal.fiber_g }
-    : estimateNutrition(meal.ingredients, 1)
-  const cost = meal.cost_per_serving != null ? meal.cost_per_serving : estimateCost(meal.ingredients)
-  const budgetTag = meal.budget_tag || (cost != null ? getBudgetTag(cost) : null)
-  const budgetStyle = budgetTag ? BUDGET_TAG_STYLES[budgetTag] : null
-
-  async function handleShareRecipe() {
-    setSharing(true)
-    try {
-      if (!meal.is_public) {
-        const { error } = await supabase.from('meals').update({ is_public: true }).eq('id', meal.id)
-        if (error) throw error
-      }
-      const url = `${window.location.origin}/recipe/${meal.id}`
-      if (navigator.share) {
-        await navigator.share({ title: meal.item_name, url })
-      } else {
-        await navigator.clipboard.writeText(url)
-        toast.success('Link copied to clipboard!')
-      }
-    } catch (e) {
-      if (e?.name !== 'AbortError') toast.error('Could not create share link')
-    }
-    setSharing(false)
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()} style={{ animation: 'fadeIn 0.2s ease' }}>
-      <div className="modal-panel">
-        {/* Photo */}
-        {meal.photo_url && (
-          <div style={{ height:'220px', overflow:'hidden' }}>
-            <img src={meal.photo_url} alt="" className="w-full h-full object-cover" />
-          </div>
-        )}
-
-        {/* Header band */}
-        <div className="relative p-6 sm:p-8" style={{ background: `linear-gradient(135deg, ${dc.bg}, transparent)`, borderBottom: '1.5px solid var(--border)' }}>
-          <button onClick={onClose} className="btn-ghost btn-icon absolute top-4 right-4 tap-target" style={{ background: 'var(--surface)' }}>
-            <X size={20} />
-          </button>
-
-          <div className="flex items-center gap-2 mb-3 flex-wrap pr-12">
-            <span className="badge" style={{ background: dc.bg, color: dc.text, border: `1px solid ${dc.border}`, fontSize: '11px' }}>
-              {DIET_LABELS[meal.diet_type]?.label}
-            </span>
-            <span className="badge" style={{ background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)', fontSize: '11px' }}>
-              {CAT_ICONS[meal.category]} {meal.category}
-            </span>
-            {sourceBadge && (
-              <span className="badge flex items-center gap-1" style={{ background: sourceBadge.bg, color: sourceBadge.text, fontSize: '11px' }}>
-                {sourceBadge.icon} {sourceBadge.label}
-              </span>
-            )}
-            {budgetStyle && (
-              <span className="badge flex items-center gap-1" style={{ background: budgetStyle.bg, color: budgetStyle.color, fontSize: '11px' }}>
-                {budgetStyle.emoji} {budgetStyle.label}{cost != null ? ` · ${formatCost(cost)}` : ''}
-              </span>
-            )}
-          </div>
-
-          <h2 className="font-display font-bold leading-tight" style={{ fontSize: 'clamp(24px, 4vw, 32px)', color: 'var(--text)', letterSpacing: '-0.03em' }}>
-            {meal.item_name}
-          </h2>
-        </div>
-
-        {/* Body */}
-        <div className="p-6 sm:p-8 space-y-7">
-
-          {/* Nutrition breakdown */}
-          {nutrition?.calories != null && (
-            <div>
-              <p className="font-semibold mb-3 flex items-center gap-2" style={{ fontSize: '14px', color: 'var(--text)' }}>
-                <Flame size={14} /> Nutrition
-                {nutrition.estimated && <span style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 500 }}>(estimated)</span>}
-              </p>
-              <div className="grid grid-cols-5 gap-2">
-                {[
-                  { label: 'Cal',     val: nutrition.calories,           unit: '' },
-                  { label: 'Protein', val: nutrition.protein_g,          unit: 'g' },
-                  { label: 'Carbs',   val: nutrition.carbs_g,            unit: 'g' },
-                  { label: 'Fat',     val: nutrition.fat_g,              unit: 'g' },
-                  { label: 'Fiber',   val: nutrition.fiber_g,            unit: 'g' },
-                ].map(({ label, val, unit }) => (
-                  <div key={label} className="text-center p-2.5 rounded-xl" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                    <p className="font-display font-bold" style={{ fontSize: '17px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
-                      {val != null ? `${val}${unit}` : '—'}
-                    </p>
-                    <p style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Ingredients */}
-          <div>
-            <p className="font-semibold mb-3 flex items-center gap-2" style={{ fontSize: '14px', color: 'var(--text)' }}>
-              🛒 Ingredients
-              <span style={{ fontSize: '12px', color: 'var(--text-3)', fontWeight: 500 }}>({ingredients.length})</span>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {ingredients.map((ing, i) => (
-                <span key={i} className="px-3 py-2 rounded-xl capitalize"
-                  style={{ fontSize: '13.5px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
-                  {ing}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Detail notes */}
-          {meal.detail_notes && (
-            <div>
-              <p className="font-semibold mb-2.5" style={{ fontSize: '14px', color: 'var(--text)' }}>📝 Notes</p>
-              <p style={{ fontSize: '14.5px', color: 'var(--text-2)', lineHeight: '1.7', whiteSpace: 'pre-wrap' }}>
-                {meal.detail_notes}
-              </p>
-            </div>
-          )}
-
-          {/* Recipe links */}
-          {(meal.video_url || meal.written_url) && (
-            <div>
-              <p className="font-semibold mb-3" style={{ fontSize: '14px', color: 'var(--text)' }}>📖 Full Recipe</p>
-              <div className="flex flex-col sm:flex-row gap-3">
-                {meal.video_url && videoMeta && (
-                  <a href={meal.video_url} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2.5 rounded-2xl transition-all duration-150 hover:opacity-90 active:scale-95 tap-target"
-                    style={{ padding: '15px 20px', background: videoMeta.color, color: '#fff', fontSize: '15px', fontWeight: 700, boxShadow: `0 6px 20px ${videoMeta.color}40` }}>
-                    {videoMeta.icon} {videoMeta.label} <span style={{ opacity: 0.75, fontWeight: 500 }}>· {videoMeta.platform}</span>
-                  </a>
-                )}
-                {meal.written_url && (
-                  <a href={meal.written_url} target="_blank" rel="noopener noreferrer"
-                    className="flex-1 flex items-center justify-center gap-2.5 rounded-2xl transition-all duration-150 hover:opacity-80 active:scale-95 tap-target"
-                    style={{ padding: '15px 20px', background: 'var(--surface-2)', border: '1.5px solid var(--border)', color: 'var(--text)', fontSize: '15px', fontWeight: 700 }}>
-                    <FileText size={16} /> Read Recipe
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!meal.video_url && !meal.written_url && !meal.detail_notes && (
-            <div className="rounded-2xl p-5 text-center" style={{ background: 'var(--surface-2)', border: '1px dashed var(--border)' }}>
-              <p style={{ fontSize: '13.5px', color: 'var(--text-3)' }}>
-                No recipe link or notes saved yet. Tap Edit to add one.
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Footer actions */}
-        <div className="flex gap-3 p-6 sm:p-8 pt-0">
-          <button onClick={handleShareRecipe} disabled={sharing} className="btn-secondary btn flex-1 tap-target">
-            {sharing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-            Share
-          </button>
-          <button onClick={() => onEdit(meal)} className="btn-secondary btn flex-1 tap-target">
-            <Edit2 size={16} /> Edit
-          </button>
-          <button onClick={() => onDelete(meal)} className="btn-danger btn flex-1 tap-target">
-            <Trash2 size={16} /> Delete
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+const EMPTY = { item_name:'', category:'Breakfast', ingredients:'', diet_type:'veg', prep_time:'', calories:'', video_url:'', written_url:'', detail_notes:'', photo_url:'' }
 
 export default function RecipesPage() {
   const { user } = useAuth()
@@ -264,6 +64,8 @@ export default function RecipesPage() {
       category:     meal.category,
       ingredients:  meal.ingredients,
       diet_type:    meal.diet_type,
+      prep_time:    meal.prep_time != null ? String(meal.prep_time) : '',
+      calories:     meal.calories != null ? String(meal.calories) : '',
       video_url:    meal.video_url || '',
       written_url:  meal.written_url || '',
       detail_notes: meal.detail_notes || '',
@@ -337,11 +139,17 @@ export default function RecipesPage() {
     e.preventDefault()
     if (!form.item_name.trim() || !form.ingredients.trim()) { toast.error('Name and ingredients required'); return }
     setSubmitting(true)
+    const toInt = v => {
+      const n = parseInt(v, 10)
+      return Number.isFinite(n) && n >= 0 ? n : null
+    }
     const payload = {
       item_name:    form.item_name.trim(),
       category:     form.category,
       ingredients:  form.ingredients.trim(),
       diet_type:    form.diet_type,
+      prep_time:    toInt(form.prep_time),
+      calories:     toInt(form.calories),
       video_url:    form.video_url.trim() || null,
       written_url:  form.written_url.trim() || null,
       detail_notes: form.detail_notes.trim() || null,
@@ -396,7 +204,7 @@ export default function RecipesPage() {
             </button>
             {showExport && (
               <div className="absolute right-0 top-full mt-2 w-44 rounded-2xl overflow-hidden z-20"
-                style={{ background:'var(--surface)', border:'1.5px solid var(--border)', boxShadow:'0 16px 48px rgba(0,0,0,0.15)', animation:'scaleIn 0.15s ease' }}>
+                style={{ background:'var(--surface)', border:'1px solid var(--border)', boxShadow:'0 16px 48px rgba(0,0,0,0.15)', animation:'scaleIn 0.15s ease' }}>
                 <button onClick={() => { exportMealsAsJSON(meals); setShowExport(false) }}
                   className="w-full text-left px-4 py-3.5 transition-colors hover:bg-[var(--surface-2)] tap-target"
                   style={{ fontSize:'14px', color:'var(--text)' }}>
@@ -420,10 +228,10 @@ export default function RecipesPage() {
       {/* Import errors */}
       {importErrors.length > 0 && (
         <div className="rounded-2xl p-4 mb-5 flex items-start gap-3"
-          style={{ background:'rgba(212,80,42,0.08)', border:'1.5px solid rgba(212,80,42,0.2)', animation:'slideDown 0.3s ease' }}>
-          <AlertTriangle size={17} style={{ color:'#D4502A', marginTop:2, flexShrink:0 }} />
+          style={{ background:'rgba(212,61,43,0.08)', border:'1px solid rgba(212,61,43,0.2)', animation:'slideDown 0.3s ease' }}>
+          <AlertTriangle size={17} style={{ color:'var(--danger)', marginTop:2, flexShrink:0 }} />
           <div className="flex-1">
-            <p className="font-semibold mb-1" style={{ color:'#D4502A', fontSize:'14px' }}>
+            <p className="font-semibold mb-1" style={{ color:'var(--danger)', fontSize:'14px' }}>
               Import issues ({importErrors.length})
             </p>
             <ul className="space-y-0.5" style={{ fontSize:'13px', color:'var(--text-3)' }}>
@@ -454,7 +262,7 @@ export default function RecipesPage() {
               <button key={d}
                 onClick={() => setDietFilter(p => p.includes(d) ? p.filter(x => x !== d) : [...p, d])}
                 className="px-4 py-2.5 rounded-full font-semibold transition-all duration-200 active:scale-95 tap-target"
-                style={{ fontSize:'13.5px', border:`2px solid ${active ? dc.border : 'var(--border)'}`, background: active ? dc.bg : 'transparent', color: active ? dc.text : 'var(--text-3)' }}>
+                style={{ fontSize:'13.5px', background: active ? dc.bg : 'var(--surface-2)', color: active ? dc.text : 'var(--text-2)' }}>
                 {DIET_LABELS[d]?.label}
               </button>
             )
@@ -470,7 +278,7 @@ export default function RecipesPage() {
       ) : meals.length === 0 ? (
         <div className="flex flex-col items-center py-28 text-center" style={{ animation:'fadeIn 0.6s ease' }}>
           <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
-            style={{ background:'var(--surface-2)', border:'1.5px solid var(--border)', fontSize:'36px' }}>
+            style={{ background:'var(--surface-2)', border:'1px solid var(--border)', fontSize:'36px' }}>
             <BookOpen size={32} style={{ color:'var(--text-3)' }} />
           </div>
           <p className="font-display font-semibold mb-2" style={{ fontSize:'22px', color:'var(--text)', letterSpacing:'-0.03em' }}>No meals found</p>
@@ -500,10 +308,10 @@ export default function RecipesPage() {
                     const hasVideo = !!meal.video_url
                     const hasWritten = !!meal.written_url
                     const sourceBadge = SOURCE_BADGES[meal.source]
-                    const nutrition = meal.calories != null
-                      ? { calories: meal.calories }
-                      : estimateNutrition(meal.ingredients, 1)
-                    const cost = meal.cost_per_serving != null ? meal.cost_per_serving : estimateCost(meal.ingredients)
+                    const facts = getMealFacts(meal, 1)
+                    const nutrition = facts.calories != null ? { calories: facts.calories } : null
+                    const cost = facts.cost
+                    const prepLabel = formatPrepTime(facts.prepTime)
                     const budgetTag = meal.budget_tag || (cost != null ? getBudgetTag(cost) : null)
                     const budgetStyle = budgetTag ? BUDGET_TAG_STYLES[budgetTag] : null
 
@@ -525,7 +333,7 @@ export default function RecipesPage() {
                             <h3 className="font-semibold leading-snug" style={{ fontSize:'16.5px', color:'var(--text)', letterSpacing:'-0.02em' }}>
                               {meal.item_name}
                             </h3>
-                            <span className="badge shrink-0" style={{ background:dc.bg, color:dc.text, border:`1px solid ${dc.border}` }}>
+                            <span className="badge shrink-0" style={{ background:dc.bg, color:dc.text }}>
                               {DIET_LABELS[meal.diet_type]?.label}
                             </span>
                           </div>
@@ -536,12 +344,22 @@ export default function RecipesPage() {
                             {meal.ingredients?.split(',').length > 5 ? ' …' : ''}
                           </p>
 
-                          {/* Nutrition + budget chips */}
-                          {(nutrition?.calories || budgetStyle) && (
+                          {/* Nutrition + time + cost + budget chips */}
+                          {(nutrition?.calories || prepLabel || cost != null || budgetStyle) && (
                             <div className="flex items-center gap-2 flex-wrap mb-3">
+                              {prepLabel && (
+                                <span className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ fontSize:'11px', fontWeight:600, color:'var(--text-2)', background:'var(--surface-2)' }}>
+                                  <Clock size={11} /> {prepLabel}
+                                </span>
+                              )}
                               {nutrition?.calories && (
                                 <span className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ fontSize:'11px', fontWeight:600, color: nutritionColor(nutrition.calories), background:'var(--surface-2)' }}>
                                   <Flame size={11} /> {nutrition.calories} cal
+                                </span>
+                              )}
+                              {cost != null && (
+                                <span className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ fontSize:'11px', fontWeight:600, color:'var(--text-2)', background:'var(--surface-2)' }}>
+                                  <DollarSign size={11} /> {formatCost(cost)}
                                 </span>
                               )}
                               {budgetStyle && (
@@ -612,12 +430,12 @@ export default function RecipesPage() {
                 {!showDetect ? (
                   <button onClick={() => setShowDetect(true)} type="button"
                     className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold transition-all tap-target"
-                    style={{ fontSize:'13.5px', background:'rgba(99,102,241,0.08)', border:'1.5px dashed rgba(99,102,241,0.3)', color:'#6366F1' }}>
+                    style={{ fontSize:'13.5px', background:'rgba(139,95,191,0.08)', border:'1px dashed rgba(139,95,191,0.3)', color:'#8B5FBF' }}>
                     <Wand2 size={15} /> Auto-fill from a recipe URL
                   </button>
                 ) : (
-                  <div className="p-4 rounded-2xl" style={{ background:'rgba(99,102,241,0.06)', border:'1.5px solid rgba(99,102,241,0.2)' }}>
-                    <p className="font-semibold mb-2 flex items-center gap-1.5" style={{ fontSize:'13px', color:'#6366F1' }}>
+                  <div className="p-4 rounded-2xl" style={{ background:'rgba(139,95,191,0.06)', border:'1px solid rgba(139,95,191,0.2)' }}>
+                    <p className="font-semibold mb-2 flex items-center gap-1.5" style={{ fontSize:'13px', color:'#8B5FBF' }}>
                       <Wand2 size={13} /> Paste a recipe URL to auto-fill
                     </p>
                     <div className="flex gap-2">
@@ -626,7 +444,7 @@ export default function RecipesPage() {
                         placeholder="https://youtube.com/... or any recipe link"
                         onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleDetectFromUrl())} />
                       <button onClick={handleDetectFromUrl} disabled={detecting} type="button"
-                        className="btn tap-target shrink-0" style={{ background:'#6366F1', color:'#fff', fontSize:'13px', padding:'10px 16px' }}>
+                        className="btn tap-target shrink-0" style={{ background:'#8B5FBF', color:'#fff', fontSize:'13px', padding:'10px 16px' }}>
                         {detecting ? <Loader2 size={14} className="animate-spin" /> : 'Detect'}
                       </button>
                     </div>
@@ -656,7 +474,7 @@ export default function RecipesPage() {
                 ) : (
                   <button type="button" onClick={() => photoRef.current?.click()} disabled={uploadingPhoto}
                     className="w-full flex flex-col items-center justify-center gap-2 rounded-2xl transition-all tap-target"
-                    style={{ height:'120px', background:'var(--surface-2)', border:'1.5px dashed var(--border)', color:'var(--text-3)' }}>
+                    style={{ height:'120px', background:'var(--surface-2)', border:'1px dashed var(--border)', color:'var(--text-3)' }}>
                     {uploadingPhoto
                       ? <Loader2 size={22} className="animate-spin" />
                       : <><ImagePlus size={22} /> <span style={{ fontSize:'13px' }}>Add a photo</span></>}
@@ -689,6 +507,22 @@ export default function RecipesPage() {
                 <textarea className="input resize-none" rows={2}
                   value={form.ingredients} onChange={e => setField('ingredients', e.target.value)}
                   placeholder="bread, avocado, olive oil, salt" required />
+              </div>
+
+              {/* Time & calories — optional; blank falls back to estimates */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="input-label flex items-center gap-1.5"><Clock size={11} /> Total time (min)</label>
+                  <input className="input" type="number" min="0" inputMode="numeric"
+                    value={form.prep_time} onChange={e => setField('prep_time', e.target.value)}
+                    placeholder="e.g. 25" />
+                </div>
+                <div>
+                  <label className="input-label flex items-center gap-1.5"><Flame size={11} /> Calories / serving</label>
+                  <input className="input" type="number" min="0" inputMode="numeric"
+                    value={form.calories} onChange={e => setField('calories', e.target.value)}
+                    placeholder="leave blank to estimate" />
+                </div>
               </div>
 
               {/* Two distinct link fields */}
@@ -731,7 +565,7 @@ export default function RecipesPage() {
         <div className="modal-backdrop" style={{ animation:'fadeIn 0.2s ease' }}>
           <div className="modal-panel" style={{ maxWidth: '420px', padding: '32px', textAlign: 'center' }}>
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{ background:'rgba(212,80,42,0.1)', border:'1.5px solid rgba(212,80,42,0.2)', fontSize:'24px' }}>
+              style={{ background:'rgba(212,61,43,0.08)', border:'1px solid rgba(212,61,43,0.2)', fontSize:'24px' }}>
               🗑
             </div>
             <h3 className="font-display font-semibold mb-1.5" style={{ fontSize:'20px', color:'var(--text)', letterSpacing:'-0.03em' }}>

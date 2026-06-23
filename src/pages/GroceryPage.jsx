@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlans } from '../hooks/usePlans'
 import { usePlanStore } from '../hooks/usePlanStore'
@@ -6,10 +6,11 @@ import { buildGroceryList } from '../lib/mealLogic'
 import { groupGroceryByCategory, GROCERY_CATEGORY_ORDER, estimateQuantity } from '../lib/groceryCategories'
 import { buildGroceryShareText, shareText } from '../lib/sharing'
 import { saveForOffline, loadOfflineData, saveOfflineChecked, isOnline } from '../lib/offline'
+import PageHeader from '../components/planner/PageHeader'
 import {
   ShoppingCart, CheckCircle2, Square, Download,
   Info, Sparkles, ArrowRight, Share2, ChevronDown,
-  ChevronRight, X, Loader2, Printer, WifiOff, Wifi
+  ChevronRight, Loader2, Printer, WifiOff, Wifi, Check,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -21,31 +22,15 @@ export function loadPlanFromSession() {
 }
 
 const CAT_ICONS = {
-  'Produce':             '🥦',
-  'Meat & Seafood':      '🥩',
-  'Dairy & Eggs':        '🥛',
-  'Bread & Bakery':      '🍞',
-  'Pantry & Dry Goods':  '🥫',
-  'Nuts, Seeds & Oils':  '🥜',
-  'Condiments & Sauces': '🫙',
-  'Spices & Herbs':      '🌿',
-  'Frozen':              '🧊',
-  'Beverages':           '☕',
-  'Other':               '📦',
+  'Produce':'🥦','Meat & Seafood':'🥩','Dairy & Eggs':'🥛','Bread & Bakery':'🍞',
+  'Pantry & Dry Goods':'🥫','Nuts, Seeds & Oils':'🥜','Condiments & Sauces':'🫙',
+  'Spices & Herbs':'🌿','Frozen':'🧊','Beverages':'☕','Other':'📦',
 }
-
 const CAT_COLORS = {
-  'Produce':             '#1F9E62',
-  'Meat & Seafood':      '#D4502A',
-  'Dairy & Eggs':        '#F59E0B',
-  'Bread & Bakery':      '#B45309',
-  'Pantry & Dry Goods':  '#6366F1',
-  'Nuts, Seeds & Oils':  '#D97706',
-  'Condiments & Sauces': '#0891B2',
-  'Spices & Herbs':      '#059669',
-  'Frozen':              '#3B82F6',
-  'Beverages':           '#8B5CF6',
-  'Other':               '#6B7280',
+  'Produce':'var(--brand)','Meat & Seafood':'var(--danger)','Dairy & Eggs':'#F59E0B',
+  'Bread & Bakery':'#B45309','Pantry & Dry Goods':'#8B5FBF','Nuts, Seeds & Oils':'#D97706',
+  'Condiments & Sauces':'#0891B2','Spices & Herbs':'#059669','Frozen':'#3B82F6',
+  'Beverages':'#8B5CF6','Other':'#6B7280',
 }
 
 export default function GroceryPage() {
@@ -61,19 +46,17 @@ export default function GroceryPage() {
   const [sharing,         setSharing]         = useState(false)
   const [online,          setOnline]          = useState(isOnline())
   const [offlineLoaded,   setOfflineLoaded]   = useState(false)
-  const [offlinePlan,     setOfflinePlan]     = useState(null) // fallback plan loaded from offline cache
+  const [offlinePlan,     setOfflinePlan]     = useState(null)
 
-  // Effective plan: live store plan, or offline-cached plan if we have no live plan
   const effectivePlan = weeklyPlan || offlinePlan
   const usingOfflineCache = !weeklyPlan && !!offlinePlan
 
-  const groceryMap  = useMemo(() => effectivePlan ? buildGroceryList(effectivePlan) : {}, [effectivePlan])
-  const grouped     = useMemo(() => groupGroceryByCategory(groceryMap), [groceryMap])
-  const allIngreds  = useMemo(() => Object.keys(groceryMap), [groceryMap])
+  const groceryMap   = useMemo(() => effectivePlan ? buildGroceryList(effectivePlan) : {}, [effectivePlan])
+  const grouped      = useMemo(() => groupGroceryByCategory(groceryMap), [groceryMap])
+  const allIngreds   = useMemo(() => Object.keys(groceryMap), [groceryMap])
   const checkedCount = allIngreds.filter(i => checked[i]).length
   const progress     = allIngreds.length ? Math.round((checkedCount / allIngreds.length) * 100) : 0
 
-  // Track online/offline status
   useEffect(() => {
     function handleOnline()  { setOnline(true) }
     function handleOffline() { setOnline(false) }
@@ -85,19 +68,16 @@ export default function GroceryPage() {
     }
   }, [])
 
-  // Cache the current grocery list whenever it changes, for offline access later
   useEffect(() => {
     if (weeklyPlan && Object.keys(groceryMap).length) {
       saveForOffline(weeklyPlan, groceryMap, checked).catch(() => {})
     }
   }, [weeklyPlan, groceryMap])
 
-  // Persist checked items to offline cache as they're toggled
   useEffect(() => {
     if (weeklyPlan) saveOfflineChecked(checked).catch(() => {})
   }, [checked])
 
-  // If there's no live plan (e.g. fresh offline page load), try loading from offline cache
   useEffect(() => {
     if (!weeklyPlan && !offlineLoaded) {
       loadOfflineData().then(data => {
@@ -111,7 +91,6 @@ export default function GroceryPage() {
   }, [weeklyPlan, offlineLoaded])
 
   function handlePrint() { window.print() }
-
   function toggle(ing)     { setChecked(p => ({ ...p, [ing]: !p[ing] })) }
   function selectAll()     { setChecked(Object.fromEntries(allIngreds.map(i => [i, true]))) }
   function clearAll()      { setChecked({}) }
@@ -153,54 +132,47 @@ export default function GroceryPage() {
     a.click()
   }
 
-  // ── Empty state ──────────────────────────────────────────
-  // Wait for the offline-cache check to finish before deciding there's nothing to show —
-  // otherwise we'd flash "no plan" for a moment even when a cached plan exists.
+  // ── Loading (waiting on offline cache check) ──────────────
   if (!effectivePlan && !offlineLoaded && !weeklyPlan) return (
     <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
-      <span className="page-eyebrow">Grocery List</span>
-      <h1 className="section-title mb-2">What to buy</h1>
+      <PageHeader eyebrow="Grocery List" title="What to buy" />
       <div className="flex items-center justify-center py-20">
         <Loader2 size={24} className="animate-spin" style={{ color: 'var(--text-3)' }} />
       </div>
     </div>
   )
 
+  // ── Empty state ───────────────────────────────────────────
   if (!effectivePlan) return (
     <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
-      <span className="page-eyebrow">Grocery List</span>
-      <h1 className="section-title mb-2">What to buy</h1>
-      <p style={{ color: 'var(--text-3)', fontSize: '15px', marginBottom: '32px' }}>
-        Generate a plan first, or load a saved one below.
-      </p>
-      <div className="card p-10 flex flex-col items-center text-center mb-5"
-        style={{ animation: 'slideUp 0.4s ease' }}>
-        <div className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
-          style={{ background: 'linear-gradient(135deg,rgba(31,158,98,0.1),rgba(31,158,98,0.04))', border: '1.5px solid rgba(31,158,98,0.15)', animation: 'float 3s ease-in-out infinite' }}>
-          <ShoppingCart size={32} style={{ color: 'var(--brand)' }} />
+      <PageHeader eyebrow="Grocery List" title="What to buy"
+        subtitle="Generate a plan first, or load a saved one below." />
+      <div className="flex flex-col items-center text-center rounded-2xl mb-5 mt-4"
+        style={{ padding: '48px 24px', border: '1px dashed var(--border-2)', animation: 'slideUp 0.4s ease' }}>
+        <div className="flex items-center justify-center rounded-2xl mb-5"
+          style={{ width: 64, height: 64, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+          <ShoppingCart size={28} style={{ color: 'var(--text-3)' }} />
         </div>
-        <h3 className="font-display font-semibold mb-2" style={{ fontSize: '22px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
-          No active plan
-        </h3>
-        <p style={{ color: 'var(--text-3)', fontSize: '15px', marginBottom: '24px', maxWidth: '300px' }}>
+        <h3 className="font-display font-semibold mb-2" style={{ fontSize: 19, color: 'var(--text)' }}>No active plan</h3>
+        <p style={{ color: 'var(--text-3)', fontSize: 14, marginBottom: 20, maxWidth: 300, lineHeight: 1.5 }}>
           Head to the Planner, generate your week, then come back for your full grocery list.
         </p>
-        <button onClick={() => navigate('/planner')} className="btn-primary btn btn-lg">
-          <Sparkles size={17} /> Go to Planner <ArrowRight size={16} />
+        <button onClick={() => navigate('/planner')} className="btn-primary btn gap-2">
+          <Sparkles size={16} /> Go to Planner <ArrowRight size={15} />
         </button>
       </div>
       {plans.length > 0 && (
         <div className="card p-5">
-          <p className="font-semibold mb-4" style={{ fontSize: '16px', color: 'var(--text)' }}>Or load a saved plan</p>
+          <p className="font-semibold mb-4" style={{ fontSize: 15, color: 'var(--text)' }}>Or load a saved plan</p>
           <div className="space-y-2">
             {plans.map(plan => (
               <button key={plan.id} onClick={() => handleLoadPlan(plan.id)}
-                className="w-full text-left px-5 py-4 rounded-xl border-2 transition-all duration-200 hover:scale-[1.01]"
-                style={{ borderColor: 'var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+                className="w-full text-left px-5 py-3.5 rounded-xl transition-all"
+                style={{ border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
                 onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--brand)'}
                 onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
                 <span className="font-semibold">{plan.name}</span>
-                <span className="ml-3" style={{ fontSize: '13px', color: 'var(--text-3)' }}>
+                <span className="ml-3 nums" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
                   {new Date(plan.created_at).toLocaleDateString()}
                 </span>
               </button>
@@ -211,101 +183,81 @@ export default function GroceryPage() {
     </div>
   )
 
-  // ── Main grocery list ───────────────────────────────────
+  // ── Main grocery list ─────────────────────────────────────
   return (
     <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
 
       {/* Offline banner */}
       {(!online || usingOfflineCache) && (
-        <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl mb-5 no-print"
-          style={{ background: 'rgba(245,158,11,0.1)', border: '1.5px solid rgba(245,158,11,0.25)', animation: 'slideDown 0.3s ease' }}>
+        <div className="flex items-center gap-2.5 px-4 py-3 rounded-2xl mb-4 no-print"
+          style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.25)', animation: 'slideDown 0.3s ease' }}>
           <WifiOff size={16} style={{ color: '#F59E0B', flexShrink: 0 }} />
-          <p style={{ fontSize: '13.5px', color: '#F59E0B', fontWeight: 600 }}>
+          <p style={{ fontSize: 13, color: '#F59E0B', fontWeight: 600 }}>
             {!online
-              ? "You're offline — showing your saved grocery list. Changes will sync once you're back online."
+              ? "You're offline — showing your saved grocery list. Changes sync when you're back online."
               : 'Showing your last cached grocery list.'}
           </p>
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-7">
-        <div>
-          <span className="page-eyebrow">Grocery List</span>
-          <h1 className="section-title">What to buy</h1>
-          <div className="flex items-center gap-2 flex-wrap mt-2">
-            <p style={{ color: 'var(--text-3)', fontSize: '15px' }}>
-              {checkedCount} of {allIngreds.length} items · {Object.keys(grouped).length} categories
-            </p>
-            <span className="badge flex items-center gap-1" style={{ background: 'rgba(31,158,98,0.1)', color: 'var(--brand)', border: '1px solid rgba(31,158,98,0.2)', fontSize: '11px' }}>
-              👥 {servings} {servings === 1 ? 'person' : 'people'}
-            </span>
-            <span className="badge flex items-center gap-1 no-print" style={{ background: online ? 'rgba(31,158,98,0.08)' : 'rgba(245,158,11,0.1)', color: online ? 'var(--brand)' : '#F59E0B', fontSize: '10.5px' }}>
+      {/* Sticky header with built-in progress */}
+      <PageHeader
+        sticky
+        eyebrow="Grocery List"
+        title="What to buy"
+        actions={
+          <>
+            <span className="badge flex items-center gap-1 no-print"
+              style={{ background: online ? 'var(--brand-light)' : 'rgba(245,158,11,0.1)', color: online ? 'var(--brand-text)' : '#F59E0B', fontSize: 10.5 }}>
               {online ? <Wifi size={10} /> : <WifiOff size={10} />} {online ? 'Synced' : 'Offline'}
             </span>
-          </div>
-        </div>
-        <div className="flex gap-2.5 flex-wrap no-print">
-          <button onClick={handlePrint} className="btn-secondary btn gap-2 tap-target">
-            <Printer size={16} /> Print
-          </button>
-          <button onClick={handleShare} disabled={sharing || !online} className="btn-secondary btn gap-2 tap-target">
-            {sharing ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Share2 size={16} />}
-            Share list
-          </button>
-          <button onClick={exportTxt} className="btn-secondary btn gap-2 tap-target">
-            <Download size={16} /> Export
-          </button>
-        </div>
-      </div>
+            <button onClick={handlePrint} className="btn-secondary btn-sm btn gap-1.5 tap-target"><Printer size={14} /> Print</button>
+            <button onClick={handleShare} disabled={sharing || !online} className="btn-secondary btn-sm btn gap-1.5 tap-target">
+              {sharing ? <Loader2 size={14} className="animate-[spin_1s_linear_infinite]" /> : <Share2 size={14} />} Share
+            </button>
+            <button onClick={exportTxt} className="btn-secondary btn-sm btn gap-1.5 tap-target"><Download size={14} /> Export</button>
+          </>
+        }
+      />
 
-      {/* Progress */}
-      <div className="card p-5 mb-5" style={{ animation: 'slideUp 0.4s ease 0.05s both' }}>
-        <div className="flex items-center justify-between mb-3">
-          <span className="font-semibold" style={{ fontSize: '15px', color: 'var(--text)' }}>
+      {/* Progress bar — compact, under sticky header */}
+      <div className="rounded-2xl p-4 mb-4 mt-1" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', animation: 'slideUp 0.4s ease 0.05s both' }}>
+        <div className="flex items-center justify-between mb-2.5">
+          <span className="font-semibold flex items-center gap-2" style={{ fontSize: 13.5, color: 'var(--text)' }}>
             Shopping progress
+            <span className="badge" style={{ background: 'var(--brand-light)', color: 'var(--brand-text)', fontSize: 10.5 }}>
+              👥 {servings} {servings === 1 ? 'person' : 'people'}
+            </span>
           </span>
-          <span className="font-mono font-bold" style={{ fontSize: '24px', color: 'var(--brand)', letterSpacing: '-0.04em' }}>
-            {progress}%
-          </span>
+          <span className="nums font-bold" style={{ fontSize: 20, color: 'var(--brand)', letterSpacing: '-0.03em' }}>{progress}%</span>
         </div>
-        <div className="rounded-full overflow-hidden" style={{ height: '10px', background: 'var(--surface-2)' }}>
-          <div className="h-full rounded-full transition-all duration-700"
-            style={{ width: `${progress}%`, background: 'linear-gradient(90deg,#1F9E62,#3AB87D)', boxShadow: progress > 0 ? '0 0 12px rgba(31,158,98,0.4)' : 'none' }} />
+        <div className="rounded-full overflow-hidden" style={{ height: 6, background: 'var(--surface-3)' }}>
+          <div className="h-full rounded-full" style={{ width: `${progress}%`, background: 'var(--brand)', transition: 'width 0.6s cubic-bezier(0.22,1,0.36,1)' }} />
         </div>
+        <p className="nums" style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 8 }}>
+          {checkedCount} of {allIngreds.length} items · {Object.keys(grouped).length} categories
+        </p>
         {progress === 100 && (
-          <p className="text-center font-semibold mt-4" style={{ fontSize: '16px', color: 'var(--brand)', animation: 'scaleIn 0.3s ease' }}>
+          <p className="text-center font-semibold mt-3" style={{ fontSize: 14, color: 'var(--brand)', animation: 'scaleIn 0.3s ease' }}>
             🎉 All done! Happy cooking.
           </p>
         )}
       </div>
 
       {/* Controls */}
-      <div className="flex flex-wrap gap-2.5 mb-6" style={{ animation: 'slideUp 0.4s ease 0.1s both' }}>
-        <button onClick={selectAll} className="btn-secondary btn gap-2">
-          <CheckCircle2 size={16} /> Select all
+      <div className="flex flex-wrap gap-2 mb-5" style={{ animation: 'slideUp 0.4s ease 0.1s both' }}>
+        <button onClick={selectAll} className="btn-secondary btn-sm btn gap-1.5"><CheckCircle2 size={14} /> Select all</button>
+        <button onClick={clearAll} className="btn-secondary btn-sm btn gap-1.5"><Square size={14} /> Clear all</button>
+        <button onClick={() => setShowQuantities(v => !v)} className="btn-sm btn gap-1.5"
+          style={{ background: showQuantities ? 'var(--brand-light)' : 'var(--surface)', border: `1px solid ${showQuantities ? 'var(--brand)' : 'var(--border)'}`, color: showQuantities ? 'var(--brand-text)' : 'var(--text-3)' }}>
+          🧮 {showQuantities ? 'Hide' : 'Show'} qty
         </button>
-        <button onClick={clearAll} className="btn-secondary btn gap-2">
-          <Square size={16} /> Clear all
-        </button>
-        <button onClick={() => setShowQuantities(v => !v)} className="btn gap-2"
-          style={{
-            background: showQuantities ? 'rgba(31,158,98,0.1)' : 'var(--surface)',
-            border: `1.5px solid ${showQuantities ? 'rgba(31,158,98,0.3)' : 'var(--border)'}`,
-            color: showQuantities ? 'var(--brand)' : 'var(--text-3)',
-          }}>
-          🧮 {showQuantities ? 'Hide' : 'Show'} quantities
-        </button>
-        <button onClick={() => setShowMeals(v => !v)} className="btn gap-2"
-          style={{
-            background: showMeals ? 'rgba(31,158,98,0.1)' : 'var(--surface)',
-            border: `1.5px solid ${showMeals ? 'rgba(31,158,98,0.3)' : 'var(--border)'}`,
-            color: showMeals ? 'var(--brand)' : 'var(--text-3)',
-          }}>
-          <Info size={16} /> {showMeals ? 'Hide' : 'Show'} meal info
+        <button onClick={() => setShowMeals(v => !v)} className="btn-sm btn gap-1.5"
+          style={{ background: showMeals ? 'var(--brand-light)' : 'var(--surface)', border: `1px solid ${showMeals ? 'var(--brand)' : 'var(--border)'}`, color: showMeals ? 'var(--brand-text)' : 'var(--text-3)' }}>
+          <Info size={14} /> {showMeals ? 'Hide' : 'Show'} meals
         </button>
         {plans.length > 0 && (
-          <select className="input" style={{ width: 'auto', fontSize: '14px' }}
+          <select className="input" style={{ width: 'auto', fontSize: 13.5, padding: '6px 12px' }}
             value={selectedPlanId} onChange={e => handleLoadPlan(e.target.value)}>
             <option value="">Switch plan…</option>
             {plans.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -313,69 +265,57 @@ export default function GroceryPage() {
         )}
       </div>
 
-      {/* Categorised grocery list */}
-      <div className="space-y-3" style={{ animation: 'slideUp 0.4s ease 0.15s both' }}>
+      {/* Categorised list */}
+      <div className="space-y-2.5" style={{ animation: 'slideUp 0.4s ease 0.15s both' }}>
         {GROCERY_CATEGORY_ORDER.map(cat => {
           const items = grouped[cat]
           if (!items || !Object.keys(items).length) return null
-          const catIngreds    = Object.keys(items).sort()
-          const catChecked    = catIngreds.filter(i => checked[i]).length
-          const allDone       = catChecked === catIngreds.length
-          const isCollapsed   = collapsedCats[cat]
-          const accentColor   = CAT_COLORS[cat] || '#6B7280'
+          const catIngreds  = Object.keys(items).sort()
+          const catChecked  = catIngreds.filter(i => checked[i]).length
+          const allDone     = catChecked === catIngreds.length
+          const isCollapsed = collapsedCats[cat]
+          const accent      = CAT_COLORS[cat] || '#6B7280'
 
           return (
             <div key={cat} className="card overflow-hidden"
-              style={{ borderColor: allDone ? 'rgba(31,158,98,0.25)' : 'var(--border)' }}>
-
+              style={{ borderColor: allDone ? 'var(--brand)' : 'var(--border)', transition: 'border-color 0.3s ease' }}>
               {/* Category header */}
               <button onClick={() => toggleCat(cat)}
-                className="w-full flex items-center gap-3 px-5 py-3.5 transition-all duration-200"
-                style={{ background: allDone ? 'rgba(31,158,98,0.04)' : 'transparent' }}>
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 text-lg"
-                  style={{ background: `${accentColor}15`, border: `1px solid ${accentColor}30` }}>
+                className="w-full flex items-center gap-3 px-4 py-3 transition-all"
+                style={{ background: allDone ? 'var(--brand-light)' : 'transparent' }}>
+                <div className="flex items-center justify-center shrink-0 rounded-xl"
+                  style={{ width: 34, height: 34, background: `${accent}15`, border: `1px solid ${accent}30`, fontSize: 16 }}>
                   {CAT_ICONS[cat] || '📦'}
                 </div>
-                <div className="flex-1 text-left">
-                  <p className="font-semibold" style={{ fontSize: '15px', color: 'var(--text)', letterSpacing: '-0.01em' }}>
+                <div className="flex-1 text-left min-w-0">
+                  <p className="font-semibold flex items-center gap-2" style={{ fontSize: 14, color: 'var(--text)' }}>
                     {cat}
-                    {allDone && <span className="ml-2 text-xs font-bold" style={{ color: 'var(--brand)' }}>✓ Done</span>}
+                    {allDone && <Check size={13} style={{ color: 'var(--brand)' }} />}
                   </p>
-                  <p style={{ fontSize: '12px', color: 'var(--text-3)' }}>
-                    {catChecked}/{catIngreds.length} items
-                  </p>
+                  <p className="nums" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>{catChecked}/{catIngreds.length} items</p>
                 </div>
-                {/* Mini progress bar */}
-                <div className="w-16 rounded-full overflow-hidden hidden sm:block" style={{ height: '4px', background: 'var(--surface-2)' }}>
-                  <div className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${(catChecked / catIngreds.length) * 100}%`, background: accentColor }} />
+                <div className="rounded-full overflow-hidden hidden sm:block" style={{ width: 56, height: 4, background: 'var(--surface-3)' }}>
+                  <div className="h-full rounded-full" style={{ width: `${(catChecked / catIngreds.length) * 100}%`, background: accent, transition: 'width 0.5s ease' }} />
                 </div>
                 {isCollapsed ? <ChevronRight size={16} style={{ color: 'var(--text-3)' }} /> : <ChevronDown size={16} style={{ color: 'var(--text-3)' }} />}
               </button>
 
               {/* Items */}
-              {!isCollapsed && catIngreds.map((ing, idx) => {
-                const done    = !!checked[ing]
-                const meals   = groceryMap[ing] || []
-                const qty     = estimateQuantity(ing, meals.length, servings)
-
+              {!isCollapsed && catIngreds.map(ing => {
+                const done  = !!checked[ing]
+                const meals = groceryMap[ing] || []
+                const qty   = estimateQuantity(ing, meals.length, servings)
                 return (
                   <button key={ing} onClick={() => toggle(ing)}
-                    className="w-full flex items-start gap-4 px-5 py-3.5 text-left transition-all duration-150"
-                    style={{
-                      borderTop: '1px solid var(--border)',
-                      background: done ? 'rgba(31,158,98,0.03)' : 'transparent',
-                    }}
+                    className="w-full flex items-start gap-3.5 px-4 py-3 text-left transition-all"
+                    style={{ borderTop: '1px solid var(--border)', background: done ? 'var(--brand-light)' : 'transparent' }}
                     onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'var(--surface-2)' }}
-                    onMouseLeave={e => { e.currentTarget.style.background = done ? 'rgba(31,158,98,0.03)' : 'transparent' }}>
-
-                    {/* Checkbox */}
-                    <div className="shrink-0 mt-0.5 flex items-center justify-center transition-all duration-200"
+                    onMouseLeave={e => { e.currentTarget.style.background = done ? 'var(--brand-light)' : 'transparent' }}>
+                    <div className="shrink-0 mt-0.5 flex items-center justify-center transition-all"
                       style={{
-                        width: '22px', height: '22px', borderRadius: '7px',
-                        border: done ? 'none' : '2px solid var(--border)',
-                        background: done ? `linear-gradient(135deg,${accentColor},${accentColor}cc)` : 'var(--surface)',
-                        boxShadow: done ? `0 2px 10px ${accentColor}40` : 'none',
+                        width: 22, height: 22, borderRadius: 7,
+                        border: done ? 'none' : '2px solid var(--border-2)',
+                        background: done ? accent : 'var(--surface)',
                         transform: done ? 'scale(1.05)' : 'scale(1)',
                       }}>
                       {done && (
@@ -384,29 +324,23 @@ export default function GroceryPage() {
                         </svg>
                       )}
                     </div>
-
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2 flex-wrap">
-                        <p className="font-medium capitalize transition-all duration-200"
-                          style={{ fontSize: '15px', color: done ? 'var(--text-3)' : 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>
+                        <p className="font-medium capitalize" style={{ fontSize: 14, color: done ? 'var(--text-3)' : 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>
                           {ing}
                         </p>
                         {showQuantities && qty && (
-                          <span className="font-mono shrink-0" style={{ fontSize: '12px', color: done ? 'var(--border)' : accentColor, fontWeight: 600 }}>
-                            {qty}
-                          </span>
+                          <span className="nums shrink-0" style={{ fontSize: 11.5, color: done ? 'var(--text-3)' : accent, fontWeight: 600 }}>{qty}</span>
                         )}
                       </div>
                       {showMeals && meals.length > 0 && (
-                        <p className="mt-0.5 transition-colors duration-200" style={{ fontSize: '12px', color: done ? 'var(--border)' : 'var(--text-3)' }}>
+                        <p style={{ fontSize: 11.5, color: done ? 'var(--border-2)' : 'var(--text-3)', marginTop: 1 }}>
                           {meals.slice(0, 3).join(' · ')}{meals.length > 3 ? ` +${meals.length - 3}` : ''}
                         </p>
                       )}
                     </div>
-
-                    <span className="shrink-0 font-mono font-semibold px-2 py-0.5 rounded-lg"
-                      style={{ fontSize: '11px', color: done ? 'var(--border)' : 'var(--text-3)', background: 'var(--surface-2)' }}>
+                    <span className="nums shrink-0 font-semibold px-2 py-0.5 rounded-lg"
+                      style={{ fontSize: 10.5, color: done ? 'var(--border-2)' : 'var(--text-3)', background: 'var(--surface-2)' }}>
                       ×{meals.length}
                     </span>
                   </button>

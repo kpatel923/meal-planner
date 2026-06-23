@@ -51,6 +51,10 @@ export function PlanProvider({ children }) {
       } catch { /* fall back to unfiltered pool on error */ }
     }
 
+    // Build synchronously — buildWeeklyPlan is sub-millisecond, so there's
+    // no reason to stall behind a 600ms timer. We defer to a macrotask (0ms)
+    // so React can paint the loading state first; unlike requestAnimationFrame
+    // this still fires reliably when the tab is backgrounded.
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         try {
@@ -76,7 +80,7 @@ export function PlanProvider({ children }) {
           setGenerating(false)
           reject(e)
         }
-      }, 600)
+      }, 0)
     })
   }, [avoidRepeats])
 

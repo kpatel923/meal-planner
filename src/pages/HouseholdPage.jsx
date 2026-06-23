@@ -71,7 +71,7 @@ export default function HouseholdPage() {
           {/* Create */}
           <div className="card p-6" style={{ animation: 'slideUp 0.4s ease 0.05s both' }}>
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: 'linear-gradient(145deg,#27B872,#0B4529)', boxShadow: '0 4px 16px rgba(31,158,98,0.3)' }}>
+              style={{ background: 'linear-gradient(145deg,var(--brand),var(--brand-dark))', boxShadow: '0 4px 16px rgba(255,90,54,0.3)' }}>
               <Plus size={22} className="text-white" />
             </div>
             <h3 className="font-display font-semibold mb-1" style={{ fontSize: '18px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
@@ -93,7 +93,7 @@ export default function HouseholdPage() {
           {/* Join */}
           <div className="card p-6" style={{ animation: 'slideUp 0.4s ease 0.1s both' }}>
             <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-4"
-              style={{ background: 'var(--surface-2)', border: '1.5px solid var(--border)' }}>
+              style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
               <LogIn size={22} style={{ color: 'var(--brand)' }} />
             </div>
             <h3 className="font-display font-semibold mb-1" style={{ fontSize: '18px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
@@ -123,7 +123,7 @@ export default function HouseholdPage() {
             <div className="flex items-start justify-between gap-4 mb-5">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl"
-                  style={{ background: 'linear-gradient(145deg,rgba(31,158,98,0.15),rgba(31,158,98,0.05))', border: '1.5px solid rgba(31,158,98,0.2)' }}>
+                  style={{ background: 'linear-gradient(145deg,rgba(255,90,54,0.15),rgba(255,90,54,0.05))', border: '1px solid rgba(255,90,54,0.2)' }}>
                   🏠
                 </div>
                 <div>
@@ -138,7 +138,7 @@ export default function HouseholdPage() {
 
               {/* Invite code */}
               <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl"
-                style={{ background: 'var(--surface-2)', border: '1.5px solid var(--border)' }}>
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
                 <div>
                   <p style={{ fontSize: '10px', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Invite code</p>
                   <p className="font-mono font-bold" style={{ fontSize: '18px', color: 'var(--text)', letterSpacing: '0.12em' }}>
@@ -158,7 +158,7 @@ export default function HouseholdPage() {
                 <div key={m.id} className="flex items-center gap-3 px-4 py-3 rounded-xl"
                   style={{ background: 'var(--surface-2)' }}>
                   <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm"
-                    style={{ background: m.user_id === household.owner_id ? 'linear-gradient(145deg,#27B872,#167D4D)' : 'var(--border)', color: m.user_id === household.owner_id ? '#fff' : 'var(--text-3)' }}>
+                    style={{ background: m.user_id === household.owner_id ? 'linear-gradient(145deg,var(--brand),var(--brand-dark))' : 'var(--border)', color: m.user_id === household.owner_id ? '#fff' : 'var(--text-3)' }}>
                     {(m.profiles?.username || '?').charAt(0).toUpperCase()}
                   </div>
                   <div className="flex-1">
@@ -182,7 +182,7 @@ export default function HouseholdPage() {
                 <button onClick={() => setConfirmLeave(false)} className="btn-secondary btn-sm btn">Cancel</button>
               </div>
             ) : (
-              <button onClick={() => setConfirmLeave(true)} className="btn-ghost btn-sm btn" style={{ color: '#D4502A' }}>
+              <button onClick={() => setConfirmLeave(true)} className="btn-ghost btn-sm btn" style={{ color: 'var(--danger)' }}>
                 Leave household
               </button>
             )}
@@ -192,7 +192,7 @@ export default function HouseholdPage() {
           <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.1s both' }}>
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ background: 'rgba(31,158,98,0.1)', border: '1px solid rgba(31,158,98,0.2)' }}>
+                style={{ background: 'rgba(255,90,54,0.1)', border: '1px solid rgba(255,90,54,0.2)' }}>
                 <Share2 size={18} style={{ color: 'var(--brand)' }} />
               </div>
               <div>

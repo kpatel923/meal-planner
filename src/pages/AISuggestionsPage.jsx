@@ -2,26 +2,28 @@ import { useState, useEffect, useRef } from 'react'
 import { useMeals } from '../hooks/useMeals'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { useAuth } from '../hooks/useAuth'
-import { getMealSuggestions } from '../lib/aiFeatures'
+import { getMealSuggestions, analyzeMealPhoto } from '../lib/aiFeatures'
+import { fileToCompressedDataURL } from '../lib/imageUtils'
+import PageHeader from '../components/planner/PageHeader'
 import {
-  Sparkles, Loader2, Plus, RefreshCw, ChefHat,
+  Sparkles, Loader2, Plus, RefreshCw,
   X, Edit2, Check, BookOpen, Globe, Layers,
-  Play, FileText, Users, Info, Mic
+  Play, FileText, Users, Mic, Camera, Search, Clock, Flame,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 const DIET_LABELS = { veg: 'Veg', vegan: 'Vegan', nonveg: 'Non-Veg' }
 const DIET_COLORS = {
-  veg:    { bg:'rgba(31,158,98,0.1)',  text:'#1F9E62', border:'rgba(31,158,98,0.25)' },
-  vegan:  { bg:'rgba(11,96,59,0.12)', text:'#3AB87D', border:'rgba(58,184,125,0.25)' },
-  nonveg: { bg:'rgba(212,80,42,0.1)', text:'#D4502A', border:'rgba(212,80,42,0.25)' },
+  veg:    { bg:'var(--brand-light)',   text:'var(--brand-text)', border:'var(--brand)' },
+  vegan:  { bg:'var(--success-light)', text:'var(--success)',    border:'var(--success)' },
+  nonveg: { bg:'rgba(212,61,43,0.1)',  text:'var(--danger)',     border:'rgba(212,61,43,0.25)' },
 }
 const CAT_ICONS = { Breakfast:'🍳', Lunch:'🥗', Dinner:'🍝', Snack:'🍎' }
 
 const SOURCE_OPTIONS = [
-  { key:'library', label:'My Recipes',  icon:<BookOpen size={14} />,  desc:'Find meals I can already make' },
-  { key:'both',    label:'Both',         icon:<Layers size={14} />,    desc:'My recipes + new ideas' },
-  { key:'web',     label:'New Ideas',    icon:<Globe size={14} />,     desc:'Discover new recipes' },
+  { key:'library', label:'My Recipes', icon:<BookOpen size={14} />, desc:'Find meals I can already make' },
+  { key:'both',    label:'Both',       icon:<Layers size={14} />,   desc:'My recipes + new ideas' },
+  { key:'web',     label:'New Ideas',  icon:<Globe size={14} />,    desc:'Discover new recipes' },
 ]
 
 // ── Review modal before adding to library ────────────────────────────
@@ -31,18 +33,18 @@ function ReviewModal({ suggestion, onClose, onConfirm }) {
     category:     suggestion.category || 'Dinner',
     diet_type:    suggestion.diet_type || 'veg',
     ingredients:  suggestion.ingredients,
+    prep_time:    suggestion.prepTime != null ? String(suggestion.prepTime) : '',
+    calories:     suggestion.calories != null ? String(suggestion.calories) : '',
     video_url:    '',
     written_url:  '',
     detail_notes: suggestion.description || '',
   })
   const [saving, setSaving] = useState(false)
-
   function setField(k, v) { setForm(p => ({ ...p, [k]: v })) }
 
   async function handleConfirm() {
     if (!form.item_name.trim() || !form.ingredients.trim()) {
-      toast.error('Name and ingredients required')
-      return
+      toast.error('Name and ingredients required'); return
     }
     setSaving(true)
     await onConfirm(form)
@@ -57,31 +59,61 @@ function ReviewModal({ suggestion, onClose, onConfirm }) {
     <div className="modal-backdrop" style={{ animation:'fadeIn 0.2s ease' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-panel" style={{ maxWidth:'560px' }}>
-
-        {/* Header */}
         <div className="flex items-start justify-between p-6 sm:p-7 pb-0">
-          <div>
-            <p style={{ fontSize:'12px', color:'var(--brand)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:'4px' }}>
-              ✨ AI Suggestion
-            </p>
-            <h3 className="font-display font-bold" style={{ fontSize:'22px', color:'var(--text)', letterSpacing:'-0.03em' }}>
-              Review before adding
-            </h3>
-            <p style={{ fontSize:'13px', color:'var(--text-3)', marginTop:'4px' }}>
-              Edit anything you'd like to change — then tap Add to Library.
-            </p>
+          <div className="flex gap-4 min-w-0">
+            {suggestion.photo && (
+              <img src={suggestion.photo} alt={suggestion.name}
+                className="shrink-0 rounded-2xl object-cover"
+                style={{ width: 64, height: 64, border: '1px solid var(--border)' }} />
+            )}
+            <div className="min-w-0">
+              <p style={{ fontSize:11, color:'var(--brand)', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>
+                {suggestion.photo ? '📸 From your photo' : '✨ AI Suggestion'}
+              </p>
+              <h3 className="font-display font-semibold" style={{ fontSize:21, color:'var(--text)', letterSpacing:'-0.03em' }}>
+                Review before adding
+              </h3>
+              <p style={{ fontSize:13, color:'var(--text-3)', marginTop:4 }}>
+                Edit anything you'd like — then tap Add to Library.
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="btn-ghost btn-icon tap-target"><X size={19} /></button>
+          <button onClick={onClose} className="btn-ghost btn-icon tap-target shrink-0"><X size={19} /></button>
         </div>
 
-        {/* Form */}
+        {/* Find-recipe-online quick links (shown for photo analysis) */}
+        {suggestion.searchQuery && (
+          <div className="px-6 sm:px-7 pt-4">
+            <div className="rounded-2xl p-3.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <p className="input-label flex items-center gap-1.5" style={{ marginBottom: 8 }}>
+                <Search size={11} /> Find the full recipe
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(suggestion.searchQuery + ' recipe')}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl tap-target transition-all"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 12.5 }}>
+                  <Play size={13} /> Video on YouTube
+                </a>
+                <a href={`https://www.google.com/search?q=${encodeURIComponent(suggestion.searchQuery + ' recipe')}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl tap-target transition-all"
+                  style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 12.5 }}>
+                  <FileText size={13} /> Written recipe
+                </a>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-3)', marginTop: 8 }}>
+                Open one, then paste the link below so it's saved with your recipe.
+              </p>
+            </div>
+          </div>
+        )}
+
         <div className="p-6 sm:p-7 space-y-4">
           <div>
             <label className="input-label">Meal name</label>
-            <input className="input" value={form.item_name}
-              onChange={e => setField('item_name', e.target.value)} />
+            <input className="input" value={form.item_name} onChange={e => setField('item_name', e.target.value)} />
           </div>
-
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="input-label">Category</label>
@@ -96,41 +128,40 @@ function ReviewModal({ suggestion, onClose, onConfirm }) {
               </select>
             </div>
           </div>
-
           <div>
             <label className="input-label">Ingredients</label>
-            <textarea className="input resize-none" rows={2}
-              value={form.ingredients} onChange={e => setField('ingredients', e.target.value)} />
+            <textarea className="input resize-none" rows={2} value={form.ingredients} onChange={e => setField('ingredients', e.target.value)} />
           </div>
-
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="input-label flex items-center gap-1"><Clock size={11} /> Time (min)</label>
+              <input className="input" type="number" min="0" inputMode="numeric"
+                value={form.prep_time} onChange={e => setField('prep_time', e.target.value)} placeholder="e.g. 25" />
+            </div>
+            <div>
+              <label className="input-label flex items-center gap-1"><Flame size={11} /> Calories / serving</label>
+              <input className="input" type="number" min="0" inputMode="numeric"
+                value={form.calories} onChange={e => setField('calories', e.target.value)} placeholder="optional" />
+            </div>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="input-label flex items-center gap-1"><Play size={11} /> Video link (optional)</label>
-              <input className="input" value={form.video_url}
-                onChange={e => setField('video_url', e.target.value)}
-                placeholder="YouTube, Instagram…" />
+              <input className="input" value={form.video_url} onChange={e => setField('video_url', e.target.value)} placeholder="YouTube, Instagram…" />
             </div>
             <div>
               <label className="input-label flex items-center gap-1"><FileText size={11} /> Written recipe (optional)</label>
-              <input className="input" value={form.written_url}
-                onChange={e => setField('written_url', e.target.value)}
-                placeholder="Blog, recipe site…" />
+              <input className="input" value={form.written_url} onChange={e => setField('written_url', e.target.value)} placeholder="Blog, recipe site…" />
             </div>
           </div>
-
           <div>
             <label className="input-label">Notes</label>
-            <textarea className="input resize-none" rows={2}
-              value={form.detail_notes} onChange={e => setField('detail_notes', e.target.value)}
-              placeholder="Any cooking tips or extra notes…" />
+            <textarea className="input resize-none" rows={2} value={form.detail_notes} onChange={e => setField('detail_notes', e.target.value)} placeholder="Any cooking tips or extra notes…" />
           </div>
-
-          {/* Actions */}
           <div className="flex gap-3 pt-2">
             <button onClick={onClose} className="btn-secondary btn flex-1 tap-target">Cancel</button>
             <button onClick={handleConfirm} disabled={saving} className="btn-primary btn flex-1 tap-target">
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-              Add to Library
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add to Library
             </button>
           </div>
         </div>
@@ -150,71 +181,51 @@ export default function AISuggestionsPage() {
   const [sourceMode,   setSourceMode]   = useState('both')
   const [loading,      setLoading]      = useState(false)
   const [suggestions,  setSuggestions]  = useState([])
-  const [added,        setAdded]        = useState({})       // { name: true } once added
-  const [reviewTarget, setReviewTarget] = useState(null)     // suggestion being reviewed
+  const [added,        setAdded]        = useState({})
+  const [reviewTarget, setReviewTarget] = useState(null)
   const [listening,    setListening]    = useState(false)
+  const [analyzing,    setAnalyzing]    = useState(false)
+  const fileInputRef   = useRef(null)
   const recognitionRef = useRef(null)
-  const voiceSupported  = typeof window !== 'undefined' &&
+  const voiceSupported = typeof window !== 'undefined' &&
     (window.SpeechRecognition || window.webkitSpeechRecognition)
 
-  // Set up the Web Speech API recognizer once
   useEffect(() => {
     if (!voiceSupported) return
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     const recognition = new SpeechRecognition()
-    recognition.continuous     = false
+    recognition.continuous = false
     recognition.interimResults = false
-    recognition.lang           = 'en-US'
-
+    recognition.lang = 'en-US'
     recognition.onresult = (event) => {
       const transcript = event.results[0][0].transcript
       setIngredients(prev => prev ? `${prev}, ${transcript}` : transcript)
     }
-    recognition.onerror = () => {
-      setListening(false)
-      toast.error('Could not hear you — try again')
-    }
+    recognition.onerror = () => { setListening(false); toast.error('Could not hear you — try again') }
     recognition.onend = () => setListening(false)
-
     recognitionRef.current = recognition
     return () => recognition.abort()
   }, [voiceSupported])
 
   function toggleListening() {
     if (!recognitionRef.current) return
-    if (listening) {
-      recognitionRef.current.stop()
-      setListening(false)
-    } else {
-      try {
-        recognitionRef.current.start()
-        setListening(true)
-      } catch { /* already started, ignore */ }
+    if (listening) { recognitionRef.current.stop(); setListening(false) }
+    else {
+      try { recognitionRef.current.start(); setListening(true) } catch { /* already started */ }
     }
   }
 
-  // Use saved diet prefs from profile, fall back to all
-  const dietPreferences = profile?.diet_prefs?.length
-    ? profile.diet_prefs
-    : ['veg','vegan','nonveg']
+  const dietPreferences = profile?.diet_prefs?.length ? profile.diet_prefs : ['veg','vegan','nonveg']
 
   async function handleSuggest() {
     if (!ingredients.trim()) { toast.error('Enter some ingredients first'); return }
     setLoading(true)
     setSuggestions([])
-
     try {
       const results = await getMealSuggestions({
-        ingredientsOnHand: ingredients,
-        existingMeals:     meals,
-        category,
-        sourceMode,
-        dietPreferences,
-        servings,
+        ingredientsOnHand: ingredients, existingMeals: meals, category, sourceMode, dietPreferences, servings,
       })
-      if (!results.length) {
-        toast.error('No suggestions returned — try different ingredients or switch to New Ideas mode')
-      }
+      if (!results.length) toast.error('No suggestions — try different ingredients or New Ideas mode')
       setSuggestions(results)
     } catch (e) {
       toast.error(e.message || 'AI suggestion failed — try again', { duration: 6000 })
@@ -223,20 +234,40 @@ export default function AISuggestionsPage() {
   }
 
   async function handleAddConfirmed(formData) {
+    const toInt = v => {
+      const n = parseInt(v, 10)
+      return Number.isFinite(n) && n >= 0 ? n : null
+    }
     const { error } = await addMeal({
-      item_name:    formData.item_name.trim(),
-      category:     formData.category,
-      ingredients:  formData.ingredients.trim(),
-      diet_type:    formData.diet_type,
-      video_url:    formData.video_url?.trim() || null,
-      written_url:  formData.written_url?.trim() || null,
-      detail_notes: formData.detail_notes?.trim() || null,
-      source:       'ai',
+      item_name: formData.item_name.trim(), category: formData.category,
+      ingredients: formData.ingredients.trim(), diet_type: formData.diet_type,
+      prep_time: toInt(formData.prep_time), calories: toInt(formData.calories),
+      video_url: formData.video_url?.trim() || null, written_url: formData.written_url?.trim() || null,
+      detail_notes: formData.detail_notes?.trim() || null, source: 'ai',
     })
     if (!error) {
       setAdded(p => ({ ...p, [formData.item_name]: true }))
       toast.success(`${formData.item_name} added to your library!`)
     }
+  }
+
+  async function handlePhotoSelected(e) {
+    const file = e.target.files?.[0]
+    // reset the input so the same file can be re-picked later
+    e.target.value = ''
+    if (!file) return
+    setAnalyzing(true)
+    const toastId = toast.loading('Analyzing your photo…')
+    try {
+      const dataUrl = await fileToCompressedDataURL(file)
+      const result = await analyzeMealPhoto(dataUrl)
+      toast.success('Got it! Review the details', { id: toastId })
+      // Route into the existing review modal, carrying the photo + search query.
+      setReviewTarget({ ...result, photo: dataUrl })
+    } catch (err) {
+      toast.error(err.message || 'Could not analyze that photo', { id: toastId, duration: 5000 })
+    }
+    setAnalyzing(false)
   }
 
   const QUICK_PROMPTS = [
@@ -248,126 +279,147 @@ export default function AISuggestionsPage() {
   ]
 
   return (
-    <div className="page-container" style={{ animation:'fadeIn 0.35s ease', maxWidth:'860px' }}>
+    <div className="page-container" style={{ animation:'fadeIn 0.35s ease', maxWidth:'820px' }}>
 
-      {/* Header */}
-      <div className="mb-8">
-        <span className="page-eyebrow">AI Chef</span>
-        <h1 className="section-title">Meal Suggestions</h1>
-        <p style={{ color:'var(--text-3)', fontSize:'15.5px', marginTop:'8px' }}>
-          Tell me what's in your fridge — I'll suggest meals you can make right now.
-        </p>
-      </div>
+      <PageHeader eyebrow="AI Chef" title="Meal Suggestions"
+        subtitle="Tell me what's in your fridge — I'll suggest meals you can make right now." />
 
       {/* Context chips */}
-      <div className="flex flex-wrap gap-2 mb-6" style={{ animation:'slideUp 0.4s ease 0.03s both' }}>
-        <span className="badge flex items-center gap-1.5"
-          style={{ background:'rgba(31,158,98,0.1)', color:'var(--brand)', border:'1px solid rgba(31,158,98,0.2)', padding:'6px 12px', fontSize:'12px' }}>
+      <div className="flex flex-wrap gap-2 mb-5 mt-1" style={{ animation:'slideUp 0.4s ease 0.03s both' }}>
+        <span className="badge flex items-center gap-1.5" style={{ background:'var(--brand-light)', color:'var(--brand-text)', border:'1px solid var(--brand)', padding:'5px 11px', fontSize:11.5 }}>
           <Users size={12} /> Cooking for {servings}
         </span>
-        <span className="badge flex items-center gap-1.5"
-          style={{ background:'var(--surface-2)', color:'var(--text-3)', border:'1px solid var(--border)', padding:'6px 12px', fontSize:'12px' }}>
+        <span className="badge flex items-center gap-1.5" style={{ background:'var(--surface-2)', color:'var(--text-3)', border:'1px solid var(--border)', padding:'5px 11px', fontSize:11.5 }}>
           🥦 {dietPreferences.map(d => d === 'nonveg' ? 'Non-Veg' : d.charAt(0).toUpperCase() + d.slice(1)).join(' · ')}
         </span>
-        <span className="badge flex items-center gap-1.5"
-          style={{ background:'var(--surface-2)', color:'var(--text-3)', border:'1px solid var(--border)', padding:'6px 12px', fontSize:'12px' }}>
-          <BookOpen size={12} /> {meals.length} recipes in library
-        </span>
-        <span style={{ fontSize:'12px', color:'var(--text-3)', display:'flex', alignItems:'center', gap:'4px' }}>
-          <Info size={12} /> Change diet & serving size in Profile
+        <span className="badge flex items-center gap-1.5" style={{ background:'var(--surface-2)', color:'var(--text-3)', border:'1px solid var(--border)', padding:'5px 11px', fontSize:11.5 }}>
+          <BookOpen size={12} /> {meals.length} recipes
         </span>
       </div>
 
-      {/* Input card */}
-      <div className="card p-6 sm:p-7 mb-6" style={{ animation:'slideUp 0.4s ease 0.05s both' }}>
-
-        {/* Source mode */}
-        <div className="mb-5">
-          <p className="input-label mb-3">Where to search</p>
-          <div className="segmented">
-            {SOURCE_OPTIONS.map(({ key, label, icon }) => (
-              <button key={key} onClick={() => setSourceMode(key)}
-                className={`segmented-option ${sourceMode === key ? 'active' : ''}`}>
-                <span className="flex items-center gap-1.5">{icon} {label}</span>
-              </button>
-            ))}
+      {/* Photo → recipe card */}
+      <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+        onChange={handlePhotoSelected} style={{ display: 'none' }} />
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        disabled={analyzing}
+        className="w-full text-left rounded-2xl mb-4 transition-all tap-target"
+        style={{
+          padding: '16px 18px',
+          background: 'linear-gradient(135deg, var(--brand-light), var(--surface-2))',
+          border: '1px solid var(--brand)',
+          animation: 'slideUp 0.4s ease 0.04s both',
+          opacity: analyzing ? 0.7 : 1,
+        }}>
+        <div className="flex items-center gap-3.5">
+          <div className="shrink-0 flex items-center justify-center rounded-2xl"
+            style={{ width: 48, height: 48, background: 'var(--brand)' }}>
+            {analyzing
+              ? <Loader2 size={22} className="animate-[spin_1s_linear_infinite]" style={{ color: '#fff' }} />
+              : <Camera size={22} style={{ color: '#fff' }} />}
           </div>
-          <p style={{ fontSize:'12px', color:'var(--text-3)', marginTop:'8px' }}>
-            {SOURCE_OPTIONS.find(s => s.key === sourceMode)?.desc}
-          </p>
-        </div>
-
-        {/* Ingredient input */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <label className="input-label" style={{ marginBottom: 0 }}>What do you have?</label>
-            {voiceSupported && (
-              <button onClick={toggleListening} type="button"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all tap-target"
-                style={{
-                  fontSize: '12px',
-                  background: listening ? 'rgba(212,80,42,0.12)' : 'rgba(31,158,98,0.1)',
-                  color: listening ? '#D4502A' : 'var(--brand)',
-                  border: `1px solid ${listening ? 'rgba(212,80,42,0.25)' : 'rgba(31,158,98,0.2)'}`,
-                }}>
-                <Mic size={13} className={listening ? 'animate-pulse' : ''} />
-                {listening ? 'Listening…' : 'Speak'}
-              </button>
-            )}
+          <div className="flex-1 min-w-0">
+            <p className="font-display font-semibold" style={{ fontSize: 16, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+              {analyzing ? 'Analyzing your photo…' : 'Snap a meal you\u2019re eating'}
+            </p>
+            <p style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 1, lineHeight: 1.45 }}>
+              {analyzing
+                ? 'Identifying the dish, ingredients & nutrition'
+                : 'Take a photo and AI identifies the dish, ingredients, and finds the recipe'}
+            </p>
           </div>
-          <textarea className="input resize-none" rows={3}
-            placeholder="e.g. chicken breast, rice, garlic, onion, bell pepper, soy sauce…"
-            value={ingredients} onChange={e => setIngredients(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && e.metaKey && handleSuggest()} />
+          {!analyzing && (
+            <span className="badge shrink-0" style={{ fontSize: 10, background: 'var(--brand)', color: '#fff', border: 'none' }}>NEW</span>
+          )}
         </div>
+      </button>
+
+      {/* divider */}
+      <div className="flex items-center gap-3 mb-4" style={{ animation: 'slideUp 0.4s ease 0.045s both' }}>
+        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>or type ingredients</span>
+        <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+      </div>
+
+      {/* Input card — streamlined: ingredients first, source + type inline */}
+      <div className="card p-5 sm:p-6 mb-6" style={{ animation:'slideUp 0.4s ease 0.05s both' }}>
+
+        {/* Ingredient input — the primary action, up top */}
+        <div className="flex items-center justify-between mb-2">
+          <label className="input-label" style={{ marginBottom: 0 }}>What do you have?</label>
+          {voiceSupported && (
+            <button onClick={toggleListening} type="button"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all tap-target"
+              style={{
+                fontSize:12,
+                background: listening ? 'rgba(212,61,43,0.12)' : 'var(--brand-light)',
+                color: listening ? 'var(--danger)' : 'var(--brand-text)',
+                border: `1px solid ${listening ? 'rgba(212,61,43,0.25)' : 'var(--brand)'}`,
+              }}>
+              <Mic size={13} className={listening ? 'animate-pulse' : ''} />
+              {listening ? 'Listening…' : 'Speak'}
+            </button>
+          )}
+        </div>
+        <textarea className="input resize-none" rows={3}
+          placeholder="e.g. chicken breast, rice, garlic, onion, bell pepper, soy sauce…"
+          value={ingredients} onChange={e => setIngredients(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && e.metaKey && handleSuggest()} />
 
         {/* Quick prompts */}
-        <div className="mb-5">
-          <p style={{ fontSize:'12px', color:'var(--text-3)', marginBottom:'8px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.07em' }}>
-            Quick tries
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_PROMPTS.map(p => (
-              <button key={p} onClick={() => setIngredients(p)}
-                className="transition-all duration-150 hover:scale-[1.02] active:scale-95 tap-target"
-                style={{ padding:'8px 14px', borderRadius:'10px', background:'var(--surface-2)', border:'1px solid var(--border)', color:'var(--text-2)', fontSize:'13px' }}>
-                {p}
-              </button>
-            ))}
+        <div className="flex flex-wrap gap-2 mt-3">
+          {QUICK_PROMPTS.map(p => (
+            <button key={p} onClick={() => setIngredients(p)}
+              className="transition-all tap-target active:scale-95"
+              style={{ padding:'6px 12px', borderRadius:10, background:'var(--surface-2)', border:'1px solid var(--border)', color:'var(--text-2)', fontSize:12.5 }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border-2)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+              {p}
+            </button>
+          ))}
+        </div>
+
+        {/* Source mode + meal type + submit — all inline */}
+        <div className="flex flex-col sm:flex-row gap-3 mt-5 pt-5" style={{ borderTop: '1px solid var(--border)' }}>
+          <div className="flex-1">
+            <p className="input-label mb-2">Where to search</p>
+            <div className="segmented">
+              {SOURCE_OPTIONS.map(({ key, label, icon }) => (
+                <button key={key} onClick={() => setSourceMode(key)}
+                  className={`segmented-option ${sourceMode === key ? 'active' : ''}`}>
+                  <span className="flex items-center gap-1.5">{icon} {label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="sm:w-40">
+            <p className="input-label mb-2">Meal type</p>
+            <select className="input" value={category} onChange={e => setCategory(e.target.value)} style={{ fontSize: 14 }}>
+              <option value="any">Any type</option>
+              <option value="Breakfast">🍳 Breakfast</option>
+              <option value="Lunch">🥗 Lunch</option>
+              <option value="Dinner">🍝 Dinner</option>
+              <option value="Snack">🍎 Snack</option>
+            </select>
           </div>
         </div>
 
-        {/* Meal type + submit */}
-        <div className="flex gap-3 flex-wrap">
-          <select className="input" style={{ width:'auto', fontSize:'14.5px' }}
-            value={category} onChange={e => setCategory(e.target.value)}>
-            <option value="any">Any meal type</option>
-            <option value="Breakfast">🍳 Breakfast</option>
-            <option value="Lunch">🥗 Lunch</option>
-            <option value="Dinner">🍝 Dinner</option>
-            <option value="Snack">🍎 Snack</option>
-          </select>
-
+        <div className="flex gap-2.5 mt-4">
           <button onClick={handleSuggest} disabled={loading || !ingredients.trim()}
-            className="btn-primary btn flex-1 tap-target" style={{ minWidth:'160px' }}>
-            {loading
-              ? <><Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> Thinking…</>
-              : <><Sparkles size={16} /> Get Suggestions</>}
+            className="btn-primary btn flex-1 btn-lg tap-target gap-2">
+            {loading ? <><Loader2 size={17} className="animate-[spin_1s_linear_infinite]" /> Thinking…</> : <><Sparkles size={17} /> Get Suggestions</>}
           </button>
-
           {suggestions.length > 0 && (
-            <button onClick={() => { setSuggestions([]); setAdded({}) }} className="btn-ghost btn btn-icon tap-target">
-              <X size={16} />
-            </button>
+            <button onClick={() => { setSuggestions([]); setAdded({}) }} className="btn-ghost btn btn-icon tap-target"><X size={16} /></button>
           )}
         </div>
       </div>
 
-      {/* Shimmer skeletons while loading */}
+      {/* Loading skeletons */}
       {loading && (
         <div className="space-y-3">
           {[...Array(5)].map((_,i) => (
-            <div key={i} className="skeleton rounded-2xl" style={{ height:'100px', animationDelay:`${i*80}ms` }} />
+            <div key={i} className="skeleton rounded-2xl" style={{ height:96, animationDelay:`${i*80}ms` }} />
           ))}
         </div>
       )}
@@ -375,92 +427,63 @@ export default function AISuggestionsPage() {
       {/* Suggestions */}
       {!loading && suggestions.length > 0 && (
         <div style={{ animation:'slideUp 0.4s ease' }}>
-          <div className="flex items-center justify-between mb-5">
-            <p className="font-semibold" style={{ fontSize:'17px', color:'var(--text)' }}>
-              {suggestions.length} suggestions for you
-            </p>
-            <button onClick={handleSuggest} className="btn-ghost btn-sm btn gap-1.5 tap-target">
-              <RefreshCw size={14} /> Refresh
-            </button>
+          <div className="flex items-center justify-between mb-4">
+            <p className="font-semibold" style={{ fontSize:16, color:'var(--text)' }}>{suggestions.length} suggestions for you</p>
+            <button onClick={handleSuggest} className="btn-ghost btn-sm btn gap-1.5 tap-target"><RefreshCw size={14} /> Refresh</button>
           </div>
 
           <div className="space-y-3">
             {suggestions.map((s, i) => {
-              const dc      = DIET_COLORS[s.diet_type] || DIET_COLORS.veg
+              const dc = DIET_COLORS[s.diet_type] || DIET_COLORS.veg
               const isAdded = !!added[s.name]
-
               return (
-                <div key={i} className="card p-5 sm:p-6"
+                <div key={i} className="card p-5"
                   style={{
                     animation: `slideUp 0.4s ease ${i*55}ms both`,
-                    borderColor: isAdded ? 'rgba(31,158,98,0.3)' : s.fromLibrary ? 'rgba(31,158,98,0.15)' : 'var(--border)',
-                    background: isAdded ? 'rgba(31,158,98,0.03)' : 'var(--surface)',
+                    borderColor: isAdded ? 'var(--brand)' : s.fromLibrary ? 'var(--brand-light)' : 'var(--border)',
+                    background: isAdded ? 'var(--brand-light)' : 'var(--surface)',
                   }}>
-                  <div className="flex items-start gap-4">
-
-                    {/* Icon */}
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 text-2xl"
-                      style={{ background:'var(--surface-2)', border:'1.5px solid var(--border)' }}>
+                  <div className="flex items-start gap-3.5">
+                    <div className="flex items-center justify-center shrink-0 rounded-2xl"
+                      style={{ width: 48, height: 48, background:'var(--surface-2)', border:'1px solid var(--border)', fontSize: 22 }}>
                       {CAT_ICONS[s.category] || '🍽'}
                     </div>
-
-                    {/* Content */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
-                        <h3 className="font-display font-bold" style={{ fontSize:'18px', color:'var(--text)', letterSpacing:'-0.02em' }}>
-                          {s.name}
-                        </h3>
+                      <div className="flex items-start justify-between gap-3 flex-wrap mb-1.5">
+                        <h3 className="font-display font-semibold" style={{ fontSize:16.5, color:'var(--text)', letterSpacing:'-0.02em' }}>{s.name}</h3>
                         <div className="flex items-center gap-2 flex-wrap shrink-0">
                           {s.fromLibrary && (
-                            <span className="badge flex items-center gap-1"
-                              style={{ fontSize:'10px', background:'rgba(31,158,98,0.12)', color:'var(--brand)', border:'1px solid rgba(31,158,98,0.2)' }}>
-                              <BookOpen size={9} /> In your library
+                            <span className="badge flex items-center gap-1" style={{ fontSize:10, background:'var(--brand-light)', color:'var(--brand-text)', border:'1px solid var(--brand)' }}>
+                              <BookOpen size={9} /> In library
                             </span>
                           )}
-                          <span className="badge"
-                            style={{ fontSize:'10px', background:dc.bg, color:dc.text, border:`1px solid ${dc.border}` }}>
-                            {DIET_LABELS[s.diet_type]}
-                          </span>
+                          <span className="badge" style={{ fontSize:10, background:dc.bg, color:dc.text, border:`1px solid ${dc.border}` }}>{DIET_LABELS[s.diet_type]}</span>
                           {s.category && s.category !== 'any' && (
-                            <span className="badge"
-                              style={{ fontSize:'10px', background:'var(--surface-2)', color:'var(--text-3)', border:'1px solid var(--border)' }}>
-                              {CAT_ICONS[s.category]} {s.category}
-                            </span>
+                            <span className="badge" style={{ fontSize:10, background:'var(--surface-2)', color:'var(--text-3)', border:'1px solid var(--border)' }}>{CAT_ICONS[s.category]} {s.category}</span>
                           )}
                         </div>
                       </div>
-
-                      {/* Ingredients */}
-                      <p style={{ fontSize:'13.5px', color:'var(--text-3)', lineHeight:'1.55', marginBottom: s.description ? '6px' : '0' }}>
-                        {s.ingredients}
-                      </p>
-
-                      {/* AI description */}
+                      <p style={{ fontSize:13, color:'var(--text-3)', lineHeight:1.55, marginBottom: s.description ? 6 : 0 }}>{s.ingredients}</p>
                       {s.description && (
-                        <p style={{ fontSize:'13px', color:'var(--brand)', fontStyle:'italic', marginBottom:'0' }}>
-                          "{s.description}"
-                        </p>
+                        <p style={{ fontSize:12.5, color:'var(--brand)', fontStyle:'italic' }}>"{s.description}"</p>
                       )}
                     </div>
                   </div>
 
-                  {/* Action buttons */}
                   {!isAdded ? (
-                    <div className="flex gap-2.5 mt-4 pt-4" style={{ borderTop:'1px solid var(--border)' }}>
-                      {!s.fromLibrary && (
-                        <button onClick={() => setReviewTarget(s)}
-                          className="btn-primary btn flex-1 tap-target gap-2">
-                          <Edit2 size={15} /> Review & Add
+                    (!s.fromLibrary) ? (
+                      <div className="flex gap-2.5 mt-3.5 pt-3.5" style={{ borderTop:'1px solid var(--border)' }}>
+                        <button onClick={() => setReviewTarget(s)} className="btn-primary btn btn-sm flex-1 tap-target gap-2">
+                          <Edit2 size={14} /> Review & Add
                         </button>
-                      )}
-                      {s.fromLibrary && (
-                        <div className="flex items-center gap-2 text-sm" style={{ color:'var(--brand)' }}>
-                          <Check size={15} /> Already in your library — ready to use in your plans
-                        </div>
-                      )}
-                    </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 mt-3.5 pt-3.5" style={{ borderTop:'1px solid var(--border)', color:'var(--brand)', fontSize:13 }}>
+                        <Check size={15} /> Already in your library — ready to use
+                      </div>
+                    )
                   ) : (
-                    <div className="flex items-center gap-2 mt-4 pt-4" style={{ borderTop:'1px solid var(--border)', color:'var(--brand)', fontSize:'14px', fontWeight:600 }}>
+                    <div className="flex items-center gap-2 mt-3.5 pt-3.5" style={{ borderTop:'1px solid var(--border)', color:'var(--brand)', fontSize:13.5, fontWeight:600 }}>
                       <Check size={16} /> Added to your library
                     </div>
                   )}
@@ -469,35 +492,28 @@ export default function AISuggestionsPage() {
             })}
           </div>
 
-          <p className="text-center mt-7" style={{ fontSize:'13px', color:'var(--text-3)' }}>
-            Added meals appear in your Recipe Library and will show up in future generated plans.
+          <p className="text-center mt-6" style={{ fontSize:12.5, color:'var(--text-3)' }}>
+            Added meals appear in your Recipe Library and show up in future generated plans.
           </p>
         </div>
       )}
 
       {/* Empty state */}
       {!loading && !suggestions.length && (
-        <div className="flex flex-col items-center py-20 text-center">
-          <div className="w-24 h-24 rounded-3xl flex items-center justify-center mb-6 text-5xl"
-            style={{ background:'linear-gradient(135deg,rgba(31,158,98,0.1),rgba(31,158,98,0.04))', border:'1.5px solid rgba(31,158,98,0.15)', animation:'float 3s ease-in-out infinite' }}>
+        <div className="flex flex-col items-center py-16 text-center">
+          <div className="flex items-center justify-center rounded-2xl mb-5"
+            style={{ width: 72, height: 72, background:'var(--surface-2)', border:'1px solid var(--border)', fontSize: 36 }}>
             🧑‍🍳
           </div>
-          <p className="font-display font-semibold mb-2.5" style={{ fontSize:'22px', color:'var(--text)', letterSpacing:'-0.03em' }}>
-            Ready when you are
-          </p>
-          <p style={{ color:'var(--text-3)', fontSize:'15px', maxWidth:'320px', lineHeight:'1.7' }}>
+          <p className="font-display font-semibold mb-2" style={{ fontSize:18, color:'var(--text)', letterSpacing:'-0.02em' }}>Ready when you are</p>
+          <p style={{ color:'var(--text-3)', fontSize:14, maxWidth:300, lineHeight:1.6 }}>
             Enter your ingredients, pick a search mode, and hit <strong style={{ color:'var(--text)' }}>Get Suggestions</strong>.
           </p>
         </div>
       )}
 
-      {/* Review modal */}
       {reviewTarget && (
-        <ReviewModal
-          suggestion={reviewTarget}
-          onClose={() => setReviewTarget(null)}
-          onConfirm={handleAddConfirmed}
-        />
+        <ReviewModal suggestion={reviewTarget} onClose={() => setReviewTarget(null)} onConfirm={handleAddConfirmed} />
       )}
     </div>
   )

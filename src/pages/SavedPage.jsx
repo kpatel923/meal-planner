@@ -64,7 +64,7 @@ export default function SavedPage() {
       {plans.length === 0 && (
         <div className="flex flex-col items-center py-28 text-center" style={{ animation: 'fadeIn 0.6s ease' }}>
           <div className="w-24 h-24 rounded-3xl flex items-center justify-center mb-6"
-            style={{ background: 'linear-gradient(135deg,rgba(31,158,98,0.1),rgba(31,158,98,0.04))', border: '1.5px solid rgba(31,158,98,0.15)', animation: 'float 3s ease-in-out infinite' }}>
+            style={{ background: 'linear-gradient(135deg,rgba(255,90,54,0.1),rgba(255,90,54,0.04))', border: '1px solid rgba(255,90,54,0.15)' }}>
             <Bookmark size={36} style={{ color: 'var(--brand)' }} />
           </div>
           <h3 className="font-display font-semibold mb-2.5" style={{ fontSize: '24px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
@@ -98,7 +98,7 @@ export default function SavedPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-1">
                     <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-                      style={{ background: 'rgba(31,158,98,0.1)', border: '1px solid rgba(31,158,98,0.2)' }}>
+                      style={{ background: 'rgba(255,90,54,0.1)', border: '1px solid rgba(255,90,54,0.2)' }}>
                       <Bookmark size={15} style={{ color: 'var(--brand)' }} />
                     </div>
                     <h3 className="font-display font-semibold truncate" style={{ fontSize: '18px', color: 'var(--text)', letterSpacing: '-0.02em' }}>
@@ -187,7 +187,7 @@ export default function SavedPage() {
           style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}>
           <div className="w-full max-w-sm card p-7 text-center" style={{ animation: 'scaleIn 0.2s ease' }}>
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"
-              style={{ background: 'rgba(212,80,42,0.1)', border: '1.5px solid rgba(212,80,42,0.2)', fontSize: '26px' }}>
+              style={{ background: 'rgba(212,61,43,0.1)', border: '1px solid rgba(212,61,43,0.2)', fontSize: '26px' }}>
               🗑
             </div>
             <h3 className="font-display font-semibold mb-2" style={{ fontSize: '20px', color: 'var(--text)', letterSpacing: '-0.03em' }}>

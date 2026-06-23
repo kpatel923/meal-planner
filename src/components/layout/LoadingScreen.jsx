@@ -3,10 +3,10 @@ export default function LoadingScreen() {
     <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--bg)' }}>
       <div className="flex flex-col items-center gap-5" style={{ animation: 'fadeIn 0.35s ease' }}>
         <div className="relative" style={{ width: '72px', height: '72px' }}>
-          <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(135deg,#1F9E62,#0B4529)', animation: 'glowPulse 2.5s ease-in-out infinite' }} />
+          <div className="absolute inset-0 rounded-2xl" style={{ background: 'linear-gradient(135deg,var(--brand),var(--brand-dark))', animation: 'glowPulse 2.5s ease-in-out infinite' }} />
           <div className="relative w-full h-full rounded-2xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,#1F9E62,#0B4529)' }}>
-            <span style={{ fontSize: '32px', animation: 'float 3s ease-in-out infinite' }}>🍽</span>
+            style={{ background: 'linear-gradient(135deg,var(--brand),var(--brand-dark))' }}>
+            <span style={{ fontSize: '32px' }}>🍽</span>
           </div>
         </div>
         <div className="flex gap-2">

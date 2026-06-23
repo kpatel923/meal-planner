@@ -4,10 +4,11 @@ import { supabase } from './supabase'
 // The Groq API key lives server-side only (set as a Supabase secret).
 // This file never touches the key directly. Provider-agnostic by design.
 
-async function callAI(prompt, maxTokens = 400) {
-  const { data, error } = await supabase.functions.invoke('ai-chef', {
-    body: { prompt, maxTokens },
-  })
+async function callAI(prompt, maxTokens = 400, imageBase64 = null) {
+  const body = { prompt, maxTokens }
+  if (imageBase64) body.imageBase64 = imageBase64
+
+  const { data, error } = await supabase.functions.invoke('ai-chef', { body })
 
   if (error) {
     let detail = error.message
@@ -23,6 +24,9 @@ async function callAI(prompt, maxTokens = 400) {
   if (data?.error) {
     console.error('AI Chef server error:', data.error)
     throw new Error(data.error)
+  }
+  if (data?._debug) {
+    console.log('[ai-chef debug]', data._debug)
   }
   return data?.text || ''
 }
@@ -114,40 +118,123 @@ export async function generateRecipeTagline(mealName, ingredients) {
 }
 
 // ── Auto-detect recipe from a pasted URL ───────────────────────────────
-// Asks the AI to infer the recipe from the URL itself (title, slug, platform).
-// This works well for descriptive URLs (YouTube titles, recipe-site slugs)
-// but can't read paywalled or JS-rendered page content — it's a best-effort
-// fill-in, not a scrape. User should always review before saving.
+// Now two-stage: (1) fetch the page's REAL title/description via the edge
+// function (oEmbed for YouTube, Open Graph tags otherwise), (2) ask the AI to
+// turn that real text into recipe fields. Far more accurate than guessing from
+// the raw URL, because the dish name actually lives in the page title — not in
+// an opaque video/reel ID.
 export async function parseRecipeFromURL(url) {
   if (!url || !url.trim()) throw new Error('Please paste a URL first')
 
   const isVideo = /youtube|youtu\.be|instagram|tiktok/i.test(url)
 
-  const prompt = `A user pasted this recipe URL: ${url}
+  // Stage 1 — fetch real page metadata.
+  let meta = { title: '', description: '', siteName: '' }
+  try {
+    const { data, error } = await supabase.functions.invoke('ai-chef', { body: { fetchUrl: url } })
+    if (!error && data?.meta) meta = data.meta
+  } catch { /* fall back to URL-only inference below */ }
 
-Based on the URL structure, slug, title text, and platform, infer what recipe this most likely is. Use your knowledge of common recipes and how URLs/titles are typically formatted on ${isVideo ? 'video platforms like YouTube/Instagram/TikTok' : 'recipe websites and blogs'}.
+  const haveMeta = !!(meta.title || meta.description)
+
+  // Stage 2 — infer recipe fields from whatever we have.
+  const sourceBlock = haveMeta
+    ? `Here is the real metadata fetched from the page:
+Title: ${meta.title || '(none)'}
+Description: ${meta.description || '(none)'}
+Site: ${meta.siteName || '(none)'}
+URL: ${url}
+
+Use the title and description as the primary source of truth.`
+    : `A user pasted this recipe URL (page content could not be fetched — infer from the URL itself): ${url}`
+
+  const prompt = `You are identifying a recipe from a ${isVideo ? 'video' : 'web'} link.
+
+${sourceBlock}
+
+From this, determine the most likely recipe. The title often contains the dish name directly. Strip channel names, emojis, and fluff like "EASY" or "in 10 minutes" from the dish name.
 
 Respond with JSON ONLY, no markdown, no preamble:
-{"name":"Best guess at recipe name","category":"Breakfast|Lunch|Dinner|Snack","diet_type":"veg|vegan|nonveg","ingredients":"comma, separated, likely, ingredients","confidence":"high|medium|low"}
+{"name":"Recipe name","category":"Breakfast|Lunch|Dinner|Snack","diet_type":"veg|vegan|nonveg","ingredients":"comma, separated, likely, ingredients","confidence":"high|medium|low"}
 
-If you genuinely cannot infer anything meaningful from the URL, respond with:
+If you genuinely cannot infer a dish, respond with:
 {"name":"","category":"Dinner","diet_type":"veg","ingredients":"","confidence":"low"}`
 
-  const raw = await callAI(prompt, 300)
+  const raw = await callAI(prompt, 350)
   try {
     const clean = raw.replace(/```json|```/g, '').trim()
     const parsed = JSON.parse(clean)
     return {
-      name:        parsed.name || '',
+      name:        parsed.name || meta.title || '',
       category:    parsed.category || 'Dinner',
       diet_type:   parsed.diet_type || 'veg',
       ingredients: parsed.ingredients || '',
-      confidence:  parsed.confidence || 'low',
+      confidence:  parsed.confidence || (haveMeta ? 'medium' : 'low'),
       videoUrl:    isVideo ? url : '',
       writtenUrl:  !isVideo ? url : '',
     }
   } catch (e) {
     console.error('Failed to parse recipe from URL:', raw)
+    // If we at least fetched a real title, return that rather than erroring out.
+    if (meta.title) {
+      return {
+        name: meta.title, category: 'Dinner', diet_type: 'veg', ingredients: '',
+        confidence: 'low', videoUrl: isVideo ? url : '', writtenUrl: !isVideo ? url : '',
+      }
+    }
     throw new Error('Could not detect recipe details from that URL — try entering manually')
+  }
+}
+
+// ── Analyze a meal photo (vision) ─────────────────────────────────────
+// Sends a photo to the vision model and gets back a structured recipe guess:
+// dish name, likely ingredients (as a comma string so nutrition can be
+// auto-estimated downstream), diet type, category, a short description, and a
+// suggested search query for finding a matching recipe/video online.
+// imageBase64 may be a raw base64 string or a full data URL.
+export async function analyzeMealPhoto(imageBase64) {
+  if (!imageBase64) throw new Error('No image provided')
+
+  const prompt = `Look at this photo carefully and describe ONLY the food you can actually see in it. Do not guess a popular dish — describe what is literally visible (the visible components, colors, textures, cooking method).
+
+First, in your own reasoning, note the key visual features. Then identify the dish based strictly on those features.
+
+Provide:
+- name: the most accurate name for what is shown (e.g. if you see grilled bread with melted cheese, say "Grilled Cheese Sandwich" — not a default guess)
+- ingredients: a simple comma-separated list of the ingredients you can actually see or that are clearly part of this specific dish (common names like "bread, cheese, butter")
+- diet_type: exactly one of veg, vegan, nonveg (use nonveg only if meat/fish/poultry is visible)
+- category: exactly one of Breakfast, Lunch, Dinner, Snack
+- description: one honest sentence about what's shown
+- searchQuery: a short query to find this exact recipe online
+- prepTime: estimated total time in minutes to make this dish (number only, e.g. 25)
+- caloriesPerServing: rough calories per serving (number only, e.g. 480)
+- confidence: high, medium, or low — use low if the image is unclear or you're unsure
+- isFood: true only if the image actually contains food
+
+Respond with JSON ONLY, no markdown backticks, no preamble:
+{"isFood":true,"name":"Dish Name","ingredients":"ing1, ing2, ing3","diet_type":"veg","category":"Lunch","description":"A short honest description.","searchQuery":"dish name recipe","prepTime":25,"caloriesPerServing":480,"confidence":"medium"}`
+
+  const raw = await callAI(prompt, 500, imageBase64)
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    if (parsed.isFood === false || (!parsed.name && !parsed.ingredients)) {
+      throw new Error("That doesn't look like a meal — try another photo")
+    }
+    return {
+      name:        parsed.name || '',
+      category:    parsed.category || 'Dinner',
+      diet_type:   ['veg', 'vegan', 'nonveg'].includes(parsed.diet_type) ? parsed.diet_type : 'nonveg',
+      ingredients: parsed.ingredients || '',
+      description: parsed.description || '',
+      searchQuery: parsed.searchQuery || parsed.name || '',
+      prepTime:    Number.isFinite(parsed.prepTime) ? parsed.prepTime : null,
+      calories:    Number.isFinite(parsed.caloriesPerServing) ? parsed.caloriesPerServing : null,
+      confidence:  parsed.confidence || 'low',
+    }
+  } catch (e) {
+    if (e.message?.includes("doesn't look like")) throw e
+    console.error('Failed to parse meal photo analysis:', raw)
+    throw new Error('Could not read that photo — try a clearer shot of the dish')
   }
 }

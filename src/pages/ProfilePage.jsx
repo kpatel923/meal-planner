@@ -115,7 +115,7 @@ export default function ProfilePage() {
       <div className="card p-6 sm:p-7 mb-5" style={{ animation: 'slideUp 0.4s ease 0.05s both' }}>
         <div className="flex items-center gap-5 mb-6">
           <div className="w-18 h-18 rounded-2xl flex items-center justify-center text-white font-display font-bold shrink-0"
-            style={{ width: '72px', height: '72px', fontSize: '28px', background: 'linear-gradient(135deg,#1F9E62,#0B4529)', boxShadow: '0 4px 20px rgba(31,158,98,0.35)' }}>
+            style={{ width: '72px', height: '72px', fontSize: '28px', background: 'linear-gradient(135deg,var(--brand),var(--brand-dark))', boxShadow: '0 4px 20px rgba(255,90,54,0.35)' }}>
             {initials}
           </div>
           <div className="flex-1 min-w-0">
@@ -172,7 +172,7 @@ export default function ProfilePage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-              style={{ background: isDark ? 'rgba(252,211,77,0.1)' : 'rgba(31,158,98,0.1)', border: '1.5px solid var(--border)' }}>
+              style={{ background: isDark ? 'rgba(252,211,77,0.1)' : 'rgba(255,90,54,0.1)', border: '1px solid var(--border)' }}>
               {isDark ? <Moon size={20} style={{ color: '#FCD34D' }} /> : <Sun size={20} style={{ color: 'var(--brand)' }} />}
             </div>
             <div>
@@ -208,7 +208,7 @@ export default function ProfilePage() {
                 className="flex flex-col items-center gap-2 py-4 rounded-xl border-2 transition-all duration-200 active:scale-95"
                 style={{
                   borderColor: active ? 'var(--brand)' : 'var(--border)',
-                  background: active ? 'rgba(31,158,98,0.08)' : 'var(--surface)',
+                  background: active ? 'rgba(255,90,54,0.08)' : 'var(--surface)',
                   color: active ? 'var(--brand)' : 'var(--text-3)',
                   transform: active ? 'scale(1.02)' : 'scale(1)',
                 }}>
@@ -256,10 +256,11 @@ export default function ProfilePage() {
             <DollarSign size={16} style={{ color: 'var(--brand)' }} /> Budget mode
           </h3>
           <button onClick={() => setBudgetModeLocal(v => !v)}
-            className="relative rounded-full transition-all duration-300 tap-target"
-            style={{ width: '52px', height: '30px', background: budgetMode ? 'var(--brand)' : 'var(--border)' }}>
-            <div className="absolute top-1 rounded-full bg-white shadow-md transition-transform duration-300"
-              style={{ width: '22px', height: '22px', left: '4px', transform: budgetMode ? 'translateX(22px)' : 'translateX(0)' }} />
+            role="switch" aria-checked={budgetMode} aria-label="Budget mode"
+            className="relative rounded-full transition-all duration-300 shrink-0"
+            style={{ width: '52px', height: '30px', background: budgetMode ? 'var(--brand)' : 'var(--border)', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <span className="absolute rounded-full bg-white shadow-md transition-transform duration-300"
+              style={{ width: '24px', height: '24px', top: '3px', left: '3px', transform: budgetMode ? 'translateX(22px)' : 'translateX(0)' }} />
           </button>
         </div>
         <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '20px' }}>
@@ -296,7 +297,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="text-right">
                   <p style={{ fontSize: '11px', color: 'var(--text-3)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>vs target</p>
-                  <p className="font-semibold" style={{ fontSize: '14px', color: currentPlanCost.total <= weeklyBudget ? 'var(--brand)' : '#D4502A' }}>
+                  <p className="font-semibold" style={{ fontSize: '14px', color: currentPlanCost.total <= weeklyBudget ? 'var(--brand)' : 'var(--danger)' }}>
                     {currentPlanCost.total <= weeklyBudget ? '✓ Under budget' : `+${formatCost(currentPlanCost.total - weeklyBudget)} over`}
                   </p>
                 </div>
@@ -333,7 +334,7 @@ export default function ProfilePage() {
             {mostUsed.map((m, i) => (
               <div key={m.meal_name} className="flex items-center gap-3 p-3 rounded-xl" style={{ background: 'var(--surface-2)' }}>
                 <span className="flex items-center justify-center font-bold rounded-lg shrink-0"
-                  style={{ width: '26px', height: '26px', fontSize: '12px', background: i < 3 ? 'rgba(31,158,98,0.15)' : 'var(--surface)', color: i < 3 ? 'var(--brand)' : 'var(--text-3)' }}>
+                  style={{ width: '26px', height: '26px', fontSize: '12px', background: i < 3 ? 'rgba(255,90,54,0.15)' : 'var(--surface)', color: i < 3 ? 'var(--brand)' : 'var(--text-3)' }}>
                   {i + 1}
                 </span>
                 <span className="flex-1 font-medium" style={{ fontSize: '14px', color: 'var(--text)' }}>{m.meal_name}</span>
@@ -383,9 +384,9 @@ export default function ProfilePage() {
       {/* ── Sign out ──────────────────────────────────── */}
       <button onClick={handleSignOut}
         className="w-full flex items-center justify-center gap-2 rounded-2xl font-medium transition-all duration-200 active:scale-98"
-        style={{ padding: '14px', fontSize: '15px', background: 'rgba(212,80,42,0.08)', border: '1.5px solid rgba(212,80,42,0.2)', color: '#D4502A', animation: 'slideUp 0.4s ease 0.3s both' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,80,42,0.15)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'rgba(212,80,42,0.08)'}>
+        style={{ padding: '14px', fontSize: '15px', background: 'rgba(212,61,43,0.08)', border: '1px solid rgba(212,61,43,0.2)', color: 'var(--danger)', animation: 'slideUp 0.4s ease 0.3s both' }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(212,61,43,0.15)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'rgba(212,61,43,0.08)'}>
         <LogOut size={17} /> Sign out
       </button>
 

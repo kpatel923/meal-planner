@@ -7,18 +7,18 @@ import { ChefHat, Play, FileText, Flame, Loader2, AlertCircle } from 'lucide-rea
 
 const DIET_LABELS = { veg: 'Vegetarian', vegan: 'Vegan', nonveg: 'Non-Vegetarian' }
 const DIET_COLORS = {
-  veg:    { bg:'rgba(31,158,98,0.1)',  text:'#1F9E62' },
-  vegan:  { bg:'rgba(11,96,59,0.12)', text:'#3AB87D' },
-  nonveg: { bg:'rgba(212,80,42,0.1)', text:'#D4502A' },
+  veg:    { bg:'rgba(255,90,54,0.1)',  text:'var(--brand)' },
+  vegan:  { bg:'rgba(11,96,59,0.12)', text:'var(--brand)' },
+  nonveg: { bg:'rgba(212,61,43,0.1)', text:'var(--danger)' },
 }
 const CAT_ICONS = { Breakfast:'🍳', Lunch:'🥗', Dinner:'🍝', Snack:'🍎' }
 
 function getVideoMeta(url) {
   if (!url) return null
-  if (url.includes('youtube') || url.includes('youtu.be')) return { label: 'Watch Video', color: '#FF0000' }
+  if (url.includes('youtube') || url.includes('youtu.be')) return { label: 'Watch Video', color: 'var(--danger)' }
   if (url.includes('instagram')) return { label: 'Watch Video', color: '#E1306C' }
   if (url.includes('tiktok')) return { label: 'Watch Video', color: '#000000' }
-  return { label: 'Watch Video', color: '#1F9E62' }
+  return { label: 'Watch Video', color: 'var(--brand)' }
 }
 
 export default function PublicRecipePage() {
@@ -79,7 +79,7 @@ export default function PublicRecipePage() {
       {/* Minimal branded header */}
       <div className="flex items-center gap-2 px-6 py-5">
         <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-          style={{ background: 'linear-gradient(145deg,#27B872,#0B4529)' }}>
+          style={{ background: 'linear-gradient(145deg,var(--brand),var(--brand-dark))' }}>
           <ChefHat size={16} className="text-white" />
         </div>
         <span className="font-display font-semibold" style={{ fontSize: '16px', color: 'var(--text)' }}>MealPlan</span>
@@ -163,7 +163,7 @@ export default function PublicRecipePage() {
             {meal.written_url && (
               <a href={meal.written_url} target="_blank" rel="noopener noreferrer"
                 className="flex-1 flex items-center justify-center gap-2.5 rounded-2xl py-4 font-bold"
-                style={{ background: 'var(--surface-2)', border: '1.5px solid var(--border)', color: 'var(--text)', fontSize: '15px' }}>
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text)', fontSize: '15px' }}>
                 <FileText size={16} /> Read Recipe
               </a>
             )}

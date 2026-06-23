@@ -67,7 +67,7 @@ export default function Onboarding({ onComplete }) {
           {step === 0 && (
             <div className="p-8 sm:p-10 text-center" style={{ animation: 'fadeIn 0.3s ease' }}>
               <div className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6"
-                style={{ background: 'linear-gradient(145deg,#27B872,#0B4529)', boxShadow: '0 0 32px rgba(31,158,98,0.4)', fontSize: '40px' }}>
+                style={{ background: 'var(--brand)', boxShadow: '0 0 32px rgba(255,90,54,0.3)', fontSize: '40px' }}>
                 🍽
               </div>
               <h2 className="font-display font-bold mb-3" style={{ fontSize: '28px', color: 'var(--text)', letterSpacing: '-0.04em' }}>
@@ -100,7 +100,7 @@ export default function Onboarding({ onComplete }) {
             <div className="p-8 sm:p-10" style={{ animation: 'slideUp 0.3s ease' }}>
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-xl"
-                  style={{ background: 'rgba(31,158,98,0.1)', border: '1px solid rgba(31,158,98,0.2)' }}>🥦</div>
+                  style={{ background: 'rgba(255,90,54,0.1)', border: '1px solid rgba(255,90,54,0.2)' }}>🥦</div>
                 <div>
                   <p style={{ fontSize: '12px', color: 'var(--brand)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Step 2 of 3</p>
                   <h3 className="font-display font-bold" style={{ fontSize: '22px', color: 'var(--text)', letterSpacing: '-0.03em' }}>
@@ -119,7 +119,7 @@ export default function Onboarding({ onComplete }) {
                       className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-200 text-left tap-target"
                       style={{
                         borderColor: active ? 'var(--brand)' : 'var(--border)',
-                        background:  active ? 'rgba(31,158,98,0.08)' : 'var(--surface-2)',
+                        background:  active ? 'rgba(255,90,54,0.08)' : 'var(--surface-2)',
                       }}>
                       <span style={{ fontSize: '28px' }}>{emoji}</span>
                       <div className="flex-1">
@@ -146,7 +146,7 @@ export default function Onboarding({ onComplete }) {
             <div className="p-8 sm:p-10" style={{ animation: 'slideUp 0.3s ease' }}>
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center"
-                  style={{ background: 'rgba(31,158,98,0.1)', border: '1px solid rgba(31,158,98,0.2)' }}>
+                  style={{ background: 'rgba(255,90,54,0.1)', border: '1px solid rgba(255,90,54,0.2)' }}>
                   <Users size={20} style={{ color: 'var(--brand)' }} />
                 </div>
                 <div>
@@ -183,7 +183,7 @@ export default function Onboarding({ onComplete }) {
                     style={{
                       fontSize: '13px',
                       border: `2px solid ${servings === n ? 'var(--brand)' : 'var(--border)'}`,
-                      background: servings === n ? 'rgba(31,158,98,0.1)' : 'transparent',
+                      background: servings === n ? 'rgba(255,90,54,0.1)' : 'transparent',
                       color: servings === n ? 'var(--brand)' : 'var(--text-3)',
                     }}>
                     {label}
@@ -204,7 +204,7 @@ export default function Onboarding({ onComplete }) {
           {step === 3 && (
             <div className="p-8 sm:p-10 text-center" style={{ animation: 'scaleIn 0.3s ease' }}>
               <div className="w-20 h-20 rounded-3xl flex items-center justify-center mx-auto mb-6"
-                style={{ background: 'linear-gradient(145deg,#27B872,#0B4529)', boxShadow: '0 0 32px rgba(31,158,98,0.4)' }}>
+                style={{ background: 'var(--brand)', boxShadow: '0 0 32px rgba(255,90,54,0.3)' }}>
                 <Sparkles size={36} className="text-white" />
               </div>
               <h2 className="font-display font-bold mb-3" style={{ fontSize: '28px', color: 'var(--text)', letterSpacing: '-0.04em' }}>

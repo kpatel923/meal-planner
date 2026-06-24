@@ -4,6 +4,8 @@
 // ingredients to minimize grocery list complexity
 // ─────────────────────────────────────────────────────────
 
+import { estimateCost } from './budget'
+
 export const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
 export const CATEGORIES = ['Breakfast','Lunch','Dinner','Snack']
 
@@ -20,6 +22,23 @@ export const DIET_LABELS = {
   nonveg: { label: 'Non-Veg', color: 'bg-clay-100 text-clay-700 border-clay-200' },
 }
 
+// Sentinel "meal" representing a planned night out / takeout — no cooking,
+// no ingredients (so it's excluded from grocery, nutrition, time, and cost).
+export const EATING_OUT_ID = '__eating_out__'
+export function makeEatingOutMeal(category) {
+  return {
+    id: EATING_OUT_ID,
+    item_name: 'Eating out',
+    category,
+    ingredients: '',
+    diet_type: 'nonveg',
+    isEatingOut: true,
+  }
+}
+export function isEatingOut(meal) {
+  return !!meal && (meal.isEatingOut === true || meal.id === EATING_OUT_ID)
+}
+
 // Parse comma-separated ingredient string into a cleaned array
 export function parseIngredients(ingredientString) {
   if (!ingredientString) return []
@@ -30,7 +49,7 @@ export function parseIngredients(ingredientString) {
 }
 
 // Score meals by ingredient overlap (higher = more shared ingredients)
-function scoreAndSampleMeals(meals, total = 7) {
+function scoreAndSampleMeals(meals, total = 7, budgetMode = false) {
   if (!meals || meals.length === 0) return []
 
   // Count ingredient frequency across all meals in category
@@ -42,19 +61,35 @@ function scoreAndSampleMeals(meals, total = 7) {
     }
   }
 
-  // Score each meal
+  // Score each meal by ingredient overlap (reuse = less waste, cheaper shop)
   const scored = meals.map(meal => ({
     ...meal,
     _ingredients: parseIngredients(meal.ingredients),
     _score: parseIngredients(meal.ingredients).reduce((sum, ing) => sum + (counter[ing] || 0), 0),
   }))
 
-  // Sort by score descending
+  if (budgetMode) {
+    // Bias toward cheaper meals: lower cost-per-serving sorts first, with the
+    // overlap score as a tiebreaker. Stored cost wins; estimate as fallback.
+    const costOf = (m) => {
+      if (m.cost_per_serving != null) return Number(m.cost_per_serving)
+      const est = estimateCost(m.ingredients)
+      return est != null ? est : 999  // unknown cost sinks to the bottom
+    }
+    scored.sort((a, b) => {
+      const ca = costOf(a), cb = costOf(b)
+      if (ca !== cb) return ca - cb
+      return b._score - a._score
+    })
+    // Sample from a slightly larger cheap pool so plans still vary day to day.
+    if (scored.length <= total) return scored
+    const pool = scored.slice(0, Math.max(12, total))
+    return shuffleAndSample(pool, total)
+  }
+
+  // Default: sort by ingredient-overlap score descending
   scored.sort((a, b) => b._score - a._score)
-
   if (scored.length <= total) return scored
-
-  // Take top 15 as pool, randomly sample `total` from it
   const pool = scored.slice(0, Math.max(15, total))
   return shuffleAndSample(pool, total)
 }
@@ -65,7 +100,8 @@ function shuffleAndSample(arr, n) {
 }
 
 // Build a full 7-day plan
-export function buildWeeklyPlan(meals) {
+export function buildWeeklyPlan(meals, opts = {}) {
+  const { budgetMode = false } = opts
   // Group by category
   const grouped = {}
   for (const meal of meals) {
@@ -81,7 +117,7 @@ export function buildWeeklyPlan(meals) {
   }
 
   for (const category of CATEGORIES) {
-    const selected = scoreAndSampleMeals(grouped[category] || [], 7)
+    const selected = scoreAndSampleMeals(grouped[category] || [], 7, budgetMode)
     for (let day = 0; day < 7; day++) {
       if (selected[day]) {
         plan[day][category] = selected[day]

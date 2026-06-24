@@ -8,9 +8,9 @@ import { buildGroceryShareText, shareText } from '../lib/sharing'
 import { saveForOffline, loadOfflineData, saveOfflineChecked, isOnline } from '../lib/offline'
 import PageHeader from '../components/planner/PageHeader'
 import {
-  ShoppingCart, CheckCircle2, Square, Download,
+  ShoppingCart, CheckCircle2, Square,
   Info, Sparkles, ArrowRight, Share2, ChevronDown,
-  ChevronRight, Loader2, Printer, WifiOff, Wifi, Check,
+  ChevronRight, Loader2, WifiOff, Wifi, Check, Plus, X,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -48,14 +48,55 @@ export default function GroceryPage() {
   const [offlineLoaded,   setOfflineLoaded]   = useState(false)
   const [offlinePlan,     setOfflinePlan]     = useState(null)
 
+  // ── Customizable list: user-added extras + removed (hidden) items ──
+  const [extraItems,  setExtraItems]  = useState([])   // [{ name, category }]
+  const [removedItems, setRemovedItems] = useState({}) // { ingredientName: true }
+  const [newItemName, setNewItemName] = useState('')
+
   const effectivePlan = weeklyPlan || offlinePlan
   const usingOfflineCache = !weeklyPlan && !!offlinePlan
 
-  const groceryMap   = useMemo(() => effectivePlan ? buildGroceryList(effectivePlan) : {}, [effectivePlan])
+  // Reset customizations whenever the underlying plan changes (e.g. regenerate).
+  useEffect(() => {
+    setExtraItems([])
+    setRemovedItems({})
+  }, [weeklyPlan])
+
+  const baseGroceryMap = useMemo(() => effectivePlan ? buildGroceryList(effectivePlan) : {}, [effectivePlan])
+
+  // Merge: drop removed items, add user extras (tagged as "Added by you").
+  const groceryMap = useMemo(() => {
+    const map = {}
+    for (const [ing, meals] of Object.entries(baseGroceryMap)) {
+      if (!removedItems[ing]) map[ing] = meals
+    }
+    for (const item of extraItems) {
+      const key = item.name.toLowerCase()
+      if (!removedItems[key]) map[key] = ['Added by you']
+    }
+    return map
+  }, [baseGroceryMap, extraItems, removedItems])
+
   const grouped      = useMemo(() => groupGroceryByCategory(groceryMap), [groceryMap])
   const allIngreds   = useMemo(() => Object.keys(groceryMap), [groceryMap])
   const checkedCount = allIngreds.filter(i => checked[i]).length
   const progress     = allIngreds.length ? Math.round((checkedCount / allIngreds.length) * 100) : 0
+
+  function addCustomItem() {
+    const name = newItemName.trim()
+    if (!name) return
+    const key = name.toLowerCase()
+    if (allIngreds.includes(key)) { toast.error('That item is already on your list'); return }
+    setExtraItems(prev => [...prev, { name: key, category: 'Other' }])
+    setRemovedItems(prev => { const n = { ...prev }; delete n[key]; return n })
+    setNewItemName('')
+  }
+
+  function removeItem(ing) {
+    setRemovedItems(prev => ({ ...prev, [ing]: true }))
+    setExtraItems(prev => prev.filter(it => it.name !== ing))
+    setChecked(prev => { const n = { ...prev }; delete n[ing]; return n })
+  }
 
   useEffect(() => {
     function handleOnline()  { setOnline(true) }
@@ -90,7 +131,6 @@ export default function GroceryPage() {
     }
   }, [weeklyPlan, offlineLoaded])
 
-  function handlePrint() { window.print() }
   function toggle(ing)     { setChecked(p => ({ ...p, [ing]: !p[ing] })) }
   function selectAll()     { setChecked(Object.fromEntries(allIngreds.map(i => [i, true]))) }
   function clearAll()      { setChecked({}) }
@@ -106,7 +146,7 @@ export default function GroceryPage() {
 
   async function handleShare() {
     setSharing(true)
-    const text   = buildGroceryShareText(groceryMap)
+    const text   = buildGroceryShareText(groceryMap, undefined, servings)
     const result = await shareText("🛒 Grocery List", text)
     if (result.clipboard) toast.success('Grocery list copied to clipboard!')
     else if (result.success) toast.success('Shared!')
@@ -114,23 +154,6 @@ export default function GroceryPage() {
     setSharing(false)
   }
 
-  function exportTxt() {
-    const lines = ['# Grocery List', `${new Date().toLocaleDateString()}`, '']
-    for (const cat of GROCERY_CATEGORY_ORDER) {
-      const items = grouped[cat]
-      if (!items || !Object.keys(items).length) continue
-      lines.push(`\n── ${cat} ──`)
-      Object.keys(items).sort().forEach(ing => {
-        const qty = estimateQuantity(ing, (groceryMap[ing] || []).length, servings)
-        lines.push(`${checked[ing] ? '[x]' : '[ ]'} ${ing.charAt(0).toUpperCase() + ing.slice(1)}${qty ? `  (${qty})` : ''}`)
-      })
-    }
-    lines.push('\nMade with MealPlan 🥗')
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' }))
-    a.download = 'grocery-list.txt'
-    a.click()
-  }
 
   // ── Loading (waiting on offline cache check) ──────────────
   if (!effectivePlan && !offlineLoaded && !weeklyPlan) return (
@@ -211,11 +234,9 @@ export default function GroceryPage() {
               style={{ background: online ? 'var(--brand-light)' : 'rgba(245,158,11,0.1)', color: online ? 'var(--brand-text)' : '#F59E0B', fontSize: 10.5 }}>
               {online ? <Wifi size={10} /> : <WifiOff size={10} />} {online ? 'Synced' : 'Offline'}
             </span>
-            <button onClick={handlePrint} className="btn-secondary btn-sm btn gap-1.5 tap-target"><Printer size={14} /> Print</button>
-            <button onClick={handleShare} disabled={sharing || !online} className="btn-secondary btn-sm btn gap-1.5 tap-target">
-              {sharing ? <Loader2 size={14} className="animate-[spin_1s_linear_infinite]" /> : <Share2 size={14} />} Share
+            <button onClick={handleShare} disabled={sharing} className="btn-primary btn-sm btn gap-1.5 tap-target">
+              {sharing ? <Loader2 size={14} className="animate-[spin_1s_linear_infinite]" /> : <Share2 size={14} />} Share list
             </button>
-            <button onClick={exportTxt} className="btn-secondary btn-sm btn gap-1.5 tap-target"><Download size={14} /> Export</button>
           </>
         }
       />
@@ -265,6 +286,15 @@ export default function GroceryPage() {
         )}
       </div>
 
+      {/* Add custom item */}
+      <div className="flex gap-2 mb-5" style={{ animation: 'slideUp 0.4s ease 0.12s both' }}>
+        <input className="input flex-1" placeholder="Add an item to your list…"
+          value={newItemName} onChange={e => setNewItemName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addCustomItem()} />
+        <button onClick={addCustomItem} disabled={!newItemName.trim()}
+          className="btn-primary btn gap-1.5 tap-target"><Plus size={15} /> Add</button>
+      </div>
+
       {/* Categorised list */}
       <div className="space-y-2.5" style={{ animation: 'slideUp 0.4s ease 0.15s both' }}>
         {GROCERY_CATEGORY_ORDER.map(cat => {
@@ -306,44 +336,49 @@ export default function GroceryPage() {
                 const meals = groceryMap[ing] || []
                 const qty   = estimateQuantity(ing, meals.length, servings)
                 return (
-                  <button key={ing} onClick={() => toggle(ing)}
-                    className="w-full flex items-start gap-3.5 px-4 py-3 text-left transition-all"
+                  <div key={ing}
+                    className="w-full flex items-start gap-3.5 px-4 py-3 transition-all group"
                     style={{ borderTop: '1px solid var(--border)', background: done ? 'var(--brand-light)' : 'transparent' }}
                     onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'var(--surface-2)' }}
                     onMouseLeave={e => { e.currentTarget.style.background = done ? 'var(--brand-light)' : 'transparent' }}>
-                    <div className="shrink-0 mt-0.5 flex items-center justify-center transition-all"
-                      style={{
-                        width: 22, height: 22, borderRadius: 7,
-                        border: done ? 'none' : '2px solid var(--border-2)',
-                        background: done ? accent : 'var(--surface)',
-                        transform: done ? 'scale(1.05)' : 'scale(1)',
-                      }}>
-                      {done && (
-                        <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 flex-wrap">
-                        <p className="font-medium capitalize" style={{ fontSize: 14, color: done ? 'var(--text-3)' : 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>
-                          {ing}
-                        </p>
-                        {showQuantities && qty && (
-                          <span className="nums shrink-0" style={{ fontSize: 11.5, color: done ? 'var(--text-3)' : accent, fontWeight: 600 }}>{qty}</span>
+                    <button onClick={() => toggle(ing)} className="flex-1 flex items-start gap-3.5 text-left tap-target min-w-0">
+                      <div className="shrink-0 mt-0.5 flex items-center justify-center transition-all"
+                        style={{
+                          width: 22, height: 22, borderRadius: 7,
+                          border: done ? 'none' : '2px solid var(--border-2)',
+                          background: done ? accent : 'var(--surface)',
+                          transform: done ? 'scale(1.05)' : 'scale(1)',
+                        }}>
+                        {done && (
+                          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={3.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
                         )}
                       </div>
-                      {showMeals && meals.length > 0 && (
-                        <p style={{ fontSize: 11.5, color: done ? 'var(--border-2)' : 'var(--text-3)', marginTop: 1 }}>
-                          {meals.slice(0, 3).join(' · ')}{meals.length > 3 ? ` +${meals.length - 3}` : ''}
-                        </p>
-                      )}
-                    </div>
-                    <span className="nums shrink-0 font-semibold px-2 py-0.5 rounded-lg"
-                      style={{ fontSize: 10.5, color: done ? 'var(--border-2)' : 'var(--text-3)', background: 'var(--surface-2)' }}>
-                      ×{meals.length}
-                    </span>
-                  </button>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                          <p className="font-medium capitalize" style={{ fontSize: 14, color: done ? 'var(--text-3)' : 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>
+                            {ing}
+                          </p>
+                          {showQuantities && qty && (
+                            <span className="nums shrink-0" style={{ fontSize: 11.5, color: done ? 'var(--text-3)' : accent, fontWeight: 600 }}>{qty}</span>
+                          )}
+                        </div>
+                        {showMeals && meals.length > 0 && (
+                          <p style={{ fontSize: 11.5, color: done ? 'var(--border-2)' : 'var(--text-3)', marginTop: 1 }}>
+                            {meals.slice(0, 3).join(' · ')}{meals.length > 3 ? ` +${meals.length - 3}` : ''}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                    <button onClick={() => removeItem(ing)} aria-label={`Remove ${ing}`}
+                      className="shrink-0 flex items-center justify-center rounded-lg tap-target transition-all"
+                      style={{ width: 30, height: 30, color: 'var(--text-3)' }}
+                      onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-3)'; e.currentTarget.style.color = 'var(--danger)' }}
+                      onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-3)' }}>
+                      <X size={15} />
+                    </button>
+                  </div>
                 )
               })}
             </div>

@@ -39,7 +39,7 @@ export function PlanProvider({ children }) {
 
   // generate() now optionally takes a userId to apply avoid-repeats logic.
   // Snapshots the previous plan so generate can be undone.
-  const generate = useCallback(async (meals, userId = null) => {
+  const generate = useCallback(async (meals, userId = null, budgetMode = false) => {
     setGenerating(true)
     setPlanDesc(null)
 
@@ -58,7 +58,7 @@ export function PlanProvider({ children }) {
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         try {
-          const plan = buildWeeklyPlan(pool)
+          const plan = buildWeeklyPlan(pool, { budgetMode })
           setWeeklyPlan(prevPlan => {
             // snapshot for undo-generate, separate from undo-swap
             if (prevPlan) {
@@ -98,11 +98,11 @@ export function PlanProvider({ children }) {
   }, [])
 
   // Regenerate a single day only
-  const regenerateDay = useCallback((dayIdx, meals) => {
+  const regenerateDay = useCallback((dayIdx, meals, budgetMode = false) => {
     setWeeklyPlan(prev => {
       if (!prev) return prev
       try {
-        const tempPlan = buildWeeklyPlan(meals)
+        const tempPlan = buildWeeklyPlan(meals, { budgetMode })
         const newDayMeals = tempPlan[0]
         const next = { ...prev, [dayIdx]: newDayMeals }
         persistPlan(next)

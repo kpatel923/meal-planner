@@ -8,7 +8,7 @@ import PageHeader from '../components/planner/PageHeader'
 import {
   Sparkles, Loader2, Plus, RefreshCw,
   X, Edit2, Check, BookOpen, Globe, Layers,
-  Play, FileText, Users, Mic, Camera, Search, Clock, Flame,
+  Play, FileText, Users, Mic, Camera, Search, Clock, Flame, Image as ImageIcon,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -185,7 +185,9 @@ export default function AISuggestionsPage() {
   const [reviewTarget, setReviewTarget] = useState(null)
   const [listening,    setListening]    = useState(false)
   const [analyzing,    setAnalyzing]    = useState(false)
-  const fileInputRef   = useRef(null)
+  const [photoMenuOpen, setPhotoMenuOpen] = useState(false)
+  const cameraInputRef  = useRef(null)
+  const libraryInputRef = useRef(null)
   const recognitionRef = useRef(null)
   const voiceSupported = typeof window !== 'undefined' &&
     (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -298,41 +300,79 @@ export default function AISuggestionsPage() {
       </div>
 
       {/* Photo → recipe card */}
-      <input ref={fileInputRef} type="file" accept="image/*" capture="environment"
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment"
         onChange={handlePhotoSelected} style={{ display: 'none' }} />
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        disabled={analyzing}
-        className="w-full text-left rounded-2xl mb-4 transition-all tap-target"
-        style={{
-          padding: '16px 18px',
-          background: 'linear-gradient(135deg, var(--brand-light), var(--surface-2))',
-          border: '1px solid var(--brand)',
-          animation: 'slideUp 0.4s ease 0.04s both',
-          opacity: analyzing ? 0.7 : 1,
-        }}>
-        <div className="flex items-center gap-3.5">
-          <div className="shrink-0 flex items-center justify-center rounded-2xl"
-            style={{ width: 48, height: 48, background: 'var(--brand)' }}>
-            {analyzing
-              ? <Loader2 size={22} className="animate-[spin_1s_linear_infinite]" style={{ color: '#fff' }} />
-              : <Camera size={22} style={{ color: '#fff' }} />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-display font-semibold" style={{ fontSize: 16, color: 'var(--text)', letterSpacing: '-0.02em' }}>
-              {analyzing ? 'Analyzing your photo…' : 'Snap a meal you\u2019re eating'}
-            </p>
-            <p style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 1, lineHeight: 1.45 }}>
+      <input ref={libraryInputRef} type="file" accept="image/*"
+        onChange={handlePhotoSelected} style={{ display: 'none' }} />
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => { if (!analyzing) setPhotoMenuOpen(v => !v) }}
+          disabled={analyzing}
+          className="w-full text-left rounded-2xl mb-4 transition-all tap-target"
+          style={{
+            padding: '16px 18px',
+            background: 'linear-gradient(135deg, var(--brand-light), var(--surface-2))',
+            border: '1px solid var(--brand)',
+            animation: 'slideUp 0.4s ease 0.04s both',
+            opacity: analyzing ? 0.7 : 1,
+          }}>
+          <div className="flex items-center gap-3.5">
+            <div className="shrink-0 flex items-center justify-center rounded-2xl"
+              style={{ width: 48, height: 48, background: 'var(--brand)' }}>
               {analyzing
-                ? 'Identifying the dish, ingredients & nutrition'
-                : 'Take a photo and AI identifies the dish, ingredients, and finds the recipe'}
-            </p>
+                ? <Loader2 size={22} className="animate-[spin_1s_linear_infinite]" style={{ color: '#fff' }} />
+                : <Camera size={22} style={{ color: '#fff' }} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-semibold" style={{ fontSize: 16, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                {analyzing ? 'Analyzing your photo…' : 'Snap or upload a meal'}
+              </p>
+              <p style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 1, lineHeight: 1.45 }}>
+                {analyzing
+                  ? 'Identifying the dish, ingredients & nutrition'
+                  : 'AI identifies the dish, ingredients, and finds the recipe'}
+              </p>
+            </div>
+            {!analyzing && (
+              <span className="badge shrink-0" style={{ fontSize: 10, background: 'var(--brand)', color: '#fff', border: 'none' }}>NEW</span>
+            )}
           </div>
-          {!analyzing && (
-            <span className="badge shrink-0" style={{ fontSize: 10, background: 'var(--brand)', color: '#fff', border: 'none' }}>NEW</span>
-          )}
-        </div>
-      </button>
+        </button>
+
+        {/* Source chooser */}
+        {photoMenuOpen && !analyzing && (
+          <>
+            <div onClick={() => setPhotoMenuOpen(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+            <div className="rounded-2xl"
+              style={{
+                position: 'absolute', top: 'calc(100% - 8px)', left: 0, right: 0, zIndex: 41,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                boxShadow: '0 16px 40px rgba(22,22,20,0.18)', overflow: 'hidden',
+                animation: 'slideDown 0.18s ease both',
+              }}>
+              <button
+                onClick={() => { setPhotoMenuOpen(false); cameraInputRef.current?.click() }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 tap-target transition-all text-left"
+                style={{ color: 'var(--text)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <Camera size={18} style={{ color: 'var(--brand)' }} />
+                <span style={{ fontSize: 14, fontWeight: 500 }}>Take a photo</span>
+              </button>
+              <button
+                onClick={() => { setPhotoMenuOpen(false); libraryInputRef.current?.click() }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 tap-target transition-all text-left"
+                style={{ color: 'var(--text)', borderTop: '1px solid var(--border)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <ImageIcon size={18} style={{ color: 'var(--brand)' }} />
+                <span style={{ fontSize: 14, fontWeight: 500 }}>Choose from library</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* divider */}
       <div className="flex items-center gap-3 mb-4" style={{ animation: 'slideUp 0.4s ease 0.045s both' }}>

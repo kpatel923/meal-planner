@@ -7,7 +7,7 @@ import { usePlanStore } from '../hooks/usePlanStore'
 import { exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
 import { getMostUsedMeals } from '../lib/avoidRepeats'
 import { weeklyBudgetTotal, budgetToTier, formatCost, BUDGET_TAG_STYLES } from '../lib/budget'
-import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, TrendingUp, DollarSign, Award } from 'lucide-react'
+import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, DollarSign, Award, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
@@ -20,7 +20,7 @@ const DIET_OPTIONS = [
 export default function ProfilePage() {
   const { user, profile, signOut, updateProfile } = useAuth()
   const { isDark, toggle } = useTheme()
-  const { meals }  = useMeals()
+  const { meals, deleteAllMeals }  = useMeals()
   const { plans }  = usePlans()
   const { servings: liveServings, setServings: setLiveServings, weeklyPlan } = usePlanStore()
   const navigate   = useNavigate()
@@ -35,6 +35,8 @@ export default function ProfilePage() {
   const [servings,     setServingsLocal] = useState(profile?.default_servings || liveServings || 2)
   const [budgetMode,   setBudgetModeLocal] = useState(profile?.budget_mode || false)
   const [weeklyBudget, setWeeklyBudgetLocal] = useState(profile?.weekly_budget || 75)
+  const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
+  const [deletingAll, setDeletingAll] = useState(false)
   const [mostUsed,     setMostUsed]     = useState([])
   const [loadingUsage, setLoadingUsage] = useState(true)
 
@@ -98,6 +100,13 @@ export default function ProfilePage() {
   }
 
   async function handleSignOut() { await signOut(); navigate('/auth') }
+
+  async function handleDeleteAll() {
+    setDeletingAll(true)
+    const { error } = await deleteAllMeals()
+    setDeletingAll(false)
+    if (!error) setConfirmDeleteAll(false)
+  }
 
   // Budget comparison: what tier does this weekly budget land in, and what's the live plan costing?
   const suggestedTier = budgetToTier(weeklyBudget, servings)
@@ -379,6 +388,34 @@ export default function ProfilePage() {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* ── Danger zone ───────────────────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.27s both', border: '1px solid rgba(212,61,43,0.25)' }}>
+        <h3 className="font-semibold mb-1" style={{ fontSize: '16px', color: 'var(--danger)' }}>Danger zone</h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '16px' }}>
+          Permanently delete your entire recipe library to start fresh. This can't be undone — consider exporting a backup above first.
+        </p>
+        {!confirmDeleteAll ? (
+          <button onClick={() => setConfirmDeleteAll(true)} className="btn gap-2"
+            style={{ background: 'rgba(212,61,43,0.08)', border: '1px solid rgba(212,61,43,0.2)', color: 'var(--danger)' }}>
+            <Trash2 size={16} /> Delete all recipes
+          </button>
+        ) : (
+          <div className="rounded-2xl p-4" style={{ background: 'rgba(212,61,43,0.06)', border: '1px solid rgba(212,61,43,0.2)' }}>
+            <p className="font-semibold mb-3" style={{ fontSize: '14px', color: 'var(--text)' }}>
+              Delete all {meals.length} recipes? This is permanent.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={handleDeleteAll} disabled={deletingAll} className="btn gap-2"
+                style={{ background: 'var(--danger)', color: '#fff' }}>
+                {deletingAll ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Trash2 size={16} />}
+                Yes, delete everything
+              </button>
+              <button onClick={() => setConfirmDeleteAll(false)} disabled={deletingAll} className="btn-secondary btn">Cancel</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Sign out ──────────────────────────────────── */}

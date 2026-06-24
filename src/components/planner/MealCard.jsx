@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DIET_LABELS } from '../../lib/mealLogic'
+import { DIET_LABELS, isEatingOut } from '../../lib/mealLogic'
 import { nutritionColor } from '../../lib/nutrition'
 import { getMealFacts, formatPrepTime } from '../../lib/mealFacts'
 import {
@@ -48,6 +48,7 @@ export default function MealCard({
   const facts = getMealFacts(meal, 1)
   const prepLabel = formatPrepTime(facts.prepTime)
   const diet = DIET_LABELS[meal.diet_type]
+  const eatingOut = isEatingOut(meal)
 
   function handleToggle(e) {
     e.stopPropagation()
@@ -97,25 +98,33 @@ export default function MealCard({
           {meal.item_name}
         </p>
         <div className="flex items-center gap-3 flex-wrap" style={{ marginTop: 4 }}>
-          {facts.calories != null && (
-            <span className="nums flex items-center gap-1" style={{ fontSize: 10.5, fontWeight: 600, color: nutritionColor(facts.calories) }}>
-              <Flame size={10} /> {facts.calories} cal
+          {eatingOut ? (
+            <span className="flex items-center gap-1" style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--brand-text)' }}>
+              🍴 No cooking tonight
             </span>
-          )}
-          {prepLabel && (
-            <span className="nums flex items-center gap-1" style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
-              <Clock size={10} /> {prepLabel}
-            </span>
-          )}
-          {facts.cost != null && (
-            <span className="nums flex items-center gap-1" style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
-              <DollarSign size={10} /> {facts.cost.toFixed(2)}
-            </span>
-          )}
-          {diet && (
-            <span className="flex items-center gap-1" style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
-              <Leaf size={10} /> {diet.label}
-            </span>
+          ) : (
+            <>
+              {facts.calories != null && (
+                <span className="nums flex items-center gap-1" style={{ fontSize: 10.5, fontWeight: 600, color: nutritionColor(facts.calories) }}>
+                  <Flame size={10} /> {facts.calories} cal
+                </span>
+              )}
+              {prepLabel && (
+                <span className="nums flex items-center gap-1" style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
+                  <Clock size={10} /> {prepLabel}
+                </span>
+              )}
+              {facts.cost != null && (
+                <span className="nums flex items-center gap-1" style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
+                  <DollarSign size={10} /> {facts.cost.toFixed(2)}
+                </span>
+              )}
+              {diet && (
+                <span className="flex items-center gap-1" style={{ fontSize: 10.5, color: 'var(--text-3)' }}>
+                  <Leaf size={10} /> {diet.label}
+                </span>
+              )}
+            </>
           )}
         </div>
       </div>

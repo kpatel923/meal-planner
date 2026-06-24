@@ -4,7 +4,7 @@ import { useMeals } from '../hooks/useMeals'
 import { usePlans } from '../hooks/usePlans'
 import { useAuth } from '../hooks/useAuth'
 import { usePlanStore } from '../hooks/usePlanStore'
-import { DAYS, CATEGORIES } from '../lib/mealLogic'
+import { DAYS, CATEGORIES, makeEatingOutMeal, isEatingOut } from '../lib/mealLogic'
 import { exportToPDF } from '../lib/pdfExport'
 import {
   buildPlanShareText, buildGroceryShareText, buildShareableURL, shareText,
@@ -12,6 +12,8 @@ import {
 import { buildGroceryList } from '../lib/mealLogic'
 import { generatePlanDescription } from '../lib/aiFeatures'
 import { weeklyNutritionTotals, nutritionColor } from '../lib/nutrition'
+import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
+import { formatCost } from '../lib/budget'
 import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
 import RecipeDetailModal from '../components/RecipeDetailModal'
 import DayStrip from '../components/planner/DayStrip'
@@ -95,7 +97,7 @@ export default function PlannerPage() {
     if (weeklyPlan && !confirmRegen) { setConfirmRegen(true); return }
     setConfirmRegen(false)
     try {
-      const plan = await generate(filteredMeals, user?.id)
+      const plan = await generate(filteredMeals, user?.id, profile?.budget_mode || false)
       toast.success('Week generated!')
       setActiveDay(todayIdx >= 0 ? todayIdx : 0)
       fetchAIDescription(plan)
@@ -107,7 +109,7 @@ export default function PlannerPage() {
   async function handleRegenerateDay(dayIdx) {
     setRegenDay(dayIdx)
     await new Promise(r => setTimeout(r, 350))
-    regenerateDay(dayIdx, filteredMeals)
+    regenerateDay(dayIdx, filteredMeals, profile?.budget_mode || false)
     setRegenDay(null)
     toast.success(`${DAYS[dayIdx]} refreshed!`)
   }
@@ -144,6 +146,13 @@ export default function PlannerPage() {
     closeSwap()
   }
 
+  function handleEatingOut() {
+    if (!swapTarget) return
+    swapMeal(swapTarget.dayIdx, swapTarget.category, makeEatingOutMeal(swapTarget.category))
+    toast.success('Marked as eating out', { icon: '🍴' })
+    closeSwap()
+  }
+
   function handleShare(type) { setShareType(type); setShowShareModal(true) }
 
   const swapMeals = swapTarget
@@ -174,6 +183,21 @@ export default function PlannerPage() {
   const activeDayNutrition = useMemo(() => {
     if (!weeklyPlan?.[activeDay]) return null
     return weeklyNutritionTotals({ 0: weeklyPlan[activeDay] }, servings).perDay
+  }, [weeklyPlan, activeDay, servings])
+
+  // Active-day time + cost totals for the day-header highlight line.
+  const activeDayFacts = useMemo(() => {
+    const day = weeklyPlan?.[activeDay]
+    if (!day) return { minutes: 0, hasTime: false, cost: 0 }
+    let minutes = 0, hasTime = false, cost = 0
+    CATEGORIES.forEach(cat => {
+      const meal = day[cat]
+      if (!meal) return
+      const f = getMealFacts(meal, servings)
+      if (f.prepTime != null) { minutes += f.prepTime; hasTime = true }
+      if (f.cost != null) cost += f.cost * servings
+    })
+    return { minutes, hasTime, cost }
   }, [weeklyPlan, activeDay, servings])
 
   // ── Loading skeleton ──────────────────────────────────────────────
@@ -334,7 +358,13 @@ export default function PlannerPage() {
                   </div>
                   <p className="nums" style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 2 }}>
                     {dayPlanned.length > 0
-                      ? `${activeDayNutrition?.calories ? activeDayNutrition.calories.toLocaleString() + ' cal · ' : ''}${dayPlanned.length} meals · ${dayPlanned.filter(c => isPrepDone(activeDay, c)).length} prepped`
+                      ? [
+                          activeDayNutrition?.calories ? `${activeDayNutrition.calories.toLocaleString()} cal` : null,
+                          activeDayFacts.hasTime ? formatPrepTime(activeDayFacts.minutes) : null,
+                          activeDayFacts.cost > 0 ? formatCost(activeDayFacts.cost) : null,
+                          `${dayPlanned.length} meals`,
+                          `${dayPlanned.filter(c => isPrepDone(activeDay, c)).length} prepped`,
+                        ].filter(Boolean).join(' · ')
                       : 'Not planned yet'}
                   </p>
                 </div>
@@ -348,14 +378,15 @@ export default function PlannerPage() {
                 </button>
               </div>
 
-              {/* Per-day nutrition banner */}
+              {/* Per-day nutrition + time + cost highlights */}
               {dayPlanned.length > 0 && activeDayNutrition && (
                 <div className="flex items-stretch rounded-2xl mb-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '10px 4px' }}>
                   {[
                     { val: activeDayNutrition.calories?.toLocaleString() ?? '—', label: 'Calories', color: nutritionColor(activeDayNutrition.calories) },
-                    { val: activeDayNutrition.carbs_g != null ? `${Math.round(activeDayNutrition.carbs_g)}g` : '—', label: 'Carbs', color: 'var(--text)' },
+                    { val: activeDayFacts.hasTime ? formatPrepTime(activeDayFacts.minutes) : '—', label: 'Time', color: 'var(--text)' },
+                    { val: activeDayFacts.cost > 0 ? formatCost(activeDayFacts.cost) : '—', label: 'Cost', color: 'var(--text)' },
                     { val: activeDayNutrition.protein_g != null ? `${Math.round(activeDayNutrition.protein_g)}g` : '—', label: 'Protein', color: 'var(--text)' },
-                    { val: activeDayNutrition.fat_g != null ? `${Math.round(activeDayNutrition.fat_g)}g` : '—', label: 'Fat', color: 'var(--text)' },
+                    { val: activeDayNutrition.carbs_g != null ? `${Math.round(activeDayNutrition.carbs_g)}g` : '—', label: 'Carbs', color: 'var(--text)' },
                   ].map((seg, i) => (
                     <div key={i} className="flex-1 text-center" style={{ borderLeft: i > 0 ? '1px solid var(--border)' : 'none' }}>
                       <div className="nums" style={{ fontSize: 15, fontWeight: 700, color: seg.color }}>{seg.val}</div>
@@ -438,7 +469,7 @@ export default function PlannerPage() {
           </PanelSection>
           <PanelSection title="Quick actions">
             <QuickActions
-              onPDF={() => exportToPDF(weeklyPlan, profile?.username)}
+              onPDF={() => exportToPDF(weeklyPlan, profile?.username, servings)}
               onPrint={() => window.print()}
               onCopyLink={() => handleShare('plan')}
               onShareHousehold={() => navigate('/household')}
@@ -497,7 +528,7 @@ export default function PlannerPage() {
       </MobileSheet>
       <MobileSheet open={mobileSheet === 'actions'} onClose={() => setMobileSheet(null)} title="Quick actions">
         <QuickActions
-          onPDF={() => { setMobileSheet(null); exportToPDF(weeklyPlan, profile?.username) }}
+          onPDF={() => { setMobileSheet(null); exportToPDF(weeklyPlan, profile?.username, servings) }}
           onPrint={() => { setMobileSheet(null); window.print() }}
           onCopyLink={() => { setMobileSheet(null); handleShare('plan') }}
           onShareHousehold={() => { setMobileSheet(null); navigate('/household') }}
@@ -537,6 +568,20 @@ export default function PlannerPage() {
               <input className="input" placeholder={`Search ${swapTarget.category} meals…`}
                 value={swapSearch} onChange={e => setSwapSearch(e.target.value)} autoFocus />
             </div>
+            {/* Eating out — quick option, no cooking */}
+            <button onClick={handleEatingOut}
+              className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
+              style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ background: 'var(--brand-light)', border: '1px solid var(--brand)' }}>
+                🍴
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold" style={{ fontSize: 15, color: 'var(--text)' }}>I'm eating out</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>No cooking — skips grocery, time &amp; cost</p>
+              </div>
+            </button>
             <div className="overflow-y-auto flex-1">
               {swapMeals.length === 0 ? (
                 <div className="py-10 text-center" style={{ color: 'var(--text-3)', fontSize: 14 }}>No meals found</div>
@@ -574,6 +619,7 @@ export default function PlannerPage() {
         <ShareModal
           weeklyPlan={weeklyPlan}
           username={profile?.username}
+          servings={servings}
           onClose={() => setShowShareModal(false)}
           initialTab={shareType}
         />
@@ -651,14 +697,14 @@ function EmptyDay({ onGenerateDay, regenerating }) {
 }
 
 // ── Share Modal (preserved from original) ─────────────────────────────
-function ShareModal({ weeklyPlan, username, onClose, initialTab }) {
+function ShareModal({ weeklyPlan, username, servings = 1, onClose, initialTab }) {
   const [tab,        setTab]        = useState(initialTab || 'plan')
   const [copied,     setCopied]     = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
   const groceryMap   = buildGroceryList(weeklyPlan)
-  const planText     = buildPlanShareText(weeklyPlan, username)
-  const groceryText  = buildGroceryShareText(groceryMap, username)
+  const planText     = buildPlanShareText(weeklyPlan, username, servings)
+  const groceryText  = buildGroceryShareText(groceryMap, username, servings)
   const shareableURL = buildShareableURL(weeklyPlan)
 
   async function handleShare() {

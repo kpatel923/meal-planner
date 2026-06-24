@@ -109,5 +109,20 @@ export function useMeals(filters = {}) {
     return { data }
   }
 
-  return { meals, loading, error, addMeal, updateMeal, deleteMeal, bulkAddMeals, refetch: fetchMeals }
+  async function deleteAllMeals() {
+    const { error } = await supabase
+      .from('meals')
+      .delete()
+      .eq('user_id', user.id)
+
+    if (error) {
+      toast.error('Failed to delete meals')
+      return { error }
+    }
+    setMeals([])
+    toast.success('All recipes deleted')
+    return {}
+  }
+
+  return { meals, loading, error, addMeal, updateMeal, deleteMeal, deleteAllMeals, bulkAddMeals, refetch: fetchMeals }
 }

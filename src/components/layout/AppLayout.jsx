@@ -141,7 +141,7 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Main content ─────────────────────────────────────── */}
-      <main className="flex-1 min-w-0 pb-28 lg:pb-0" style={{ overflowX: 'hidden' }}>
+      <main className="flex-1 min-w-0 pb-28 lg:pb-0 safe-top" style={{ overflowX: 'hidden' }}>
         <Outlet />
       </main>
 

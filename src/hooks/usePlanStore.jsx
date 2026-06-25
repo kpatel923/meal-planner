@@ -4,6 +4,8 @@ import { getRecentlyUsedMeals, applyAvoidRepeats, recordMealsUsed } from '../lib
 
 const PlanContext = createContext(null)
 const SERVINGS_KEY = 'mealplan_servings'
+const PLAN_KEY = 'mealplan_active'        // the auto-saved active plan (survives app close)
+const PREP_KEY = 'mealplan_active_prep'   // prep checkboxes for the active plan
 
 function loadStoredServings() {
   try {
@@ -13,13 +15,27 @@ function loadStoredServings() {
   } catch { return 2 }
 }
 
+// Auto-saved plan persists across app launches (localStorage, not session).
+function loadStoredPlan() {
+  try {
+    const raw = localStorage.getItem(PLAN_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+function loadStoredPrep() {
+  try {
+    const raw = localStorage.getItem(PREP_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
 export function PlanProvider({ children }) {
-  const [weeklyPlan,    setWeeklyPlan]    = useState(null)
+  const [weeklyPlan,    setWeeklyPlan]    = useState(loadStoredPlan)
   const [dietTypes,     setDietTypes]     = useState(['veg','vegan','nonveg'])
   const [servings,      setServingsRaw]   = useState(loadStoredServings)
   const [generating,    setGenerating]    = useState(false)
   const [expandedDay,   setExpandedDay]   = useState(null)
-  const [prepChecked,   setPrepChecked]   = useState({})   // { "0-Breakfast": true }
+  const [prepChecked,   setPrepChecked]   = useState(loadStoredPrep)   // { "0-Breakfast": true }
   const [undoStack,     setUndoStack]     = useState([])   // for undo swap
   const [planDesc,      setPlanDesc]      = useState(null) // AI description
   const [avoidRepeats,  setAvoidRepeats]  = useState(true) // toggle for the feature
@@ -33,8 +49,15 @@ export function PlanProvider({ children }) {
     try { localStorage.setItem(SERVINGS_KEY, String(clamped)) } catch {}
   }, [])
 
+  // Auto-save the active plan to localStorage so it's restored on next launch.
   function persistPlan(plan) {
-    try { sessionStorage.setItem('mealplan_current', JSON.stringify(plan)) } catch {}
+    try {
+      if (plan) localStorage.setItem(PLAN_KEY, JSON.stringify(plan))
+      else localStorage.removeItem(PLAN_KEY)
+    } catch {}
+  }
+  function persistPrep(prep) {
+    try { localStorage.setItem(PREP_KEY, JSON.stringify(prep || {})) } catch {}
   }
 
   // generate() now optionally takes a userId to apply avoid-repeats logic.
@@ -70,6 +93,7 @@ export function PlanProvider({ children }) {
           })
           setExpandedDay(0)
           setPrepChecked({})
+          persistPrep({})
           setUndoStack([])
           persistPlan(plan)
           setGenerating(false)
@@ -176,12 +200,19 @@ export function PlanProvider({ children }) {
     setUndoStack([])
     setPlanDesc(null)
     setPrevPlanSnapshot(null)
-    try { sessionStorage.removeItem('mealplan_current') } catch {}
+    try {
+      localStorage.removeItem(PLAN_KEY)
+      localStorage.removeItem(PREP_KEY)
+    } catch {}
   }, [])
 
   const togglePrep = useCallback((dayIdx, category) => {
     const key = `${dayIdx}-${category}`
-    setPrepChecked(prev => ({ ...prev, [key]: !prev[key] }))
+    setPrepChecked(prev => {
+      const next = { ...prev, [key]: !prev[key] }
+      persistPrep(next)
+      return next
+    })
   }, [])
 
   const isPrepDone = useCallback((dayIdx, category) => {

@@ -5,21 +5,22 @@ import { usePlanStore } from '../hooks/usePlanStore'
 import { DAYS, CATEGORIES, CATEGORY_ICONS } from '../lib/mealLogic'
 import { exportToPDF } from '../lib/pdfExport'
 import { useAuth } from '../hooks/useAuth'
-import { Bookmark, Trash2, Eye, EyeOff, Download, ShoppingCart, Loader2, CalendarDays, Sparkles } from 'lucide-react'
+import { Bookmark, Trash2, Eye, EyeOff, Download, ShoppingCart, Loader2, CalendarDays, Sparkles, CalendarCheck } from 'lucide-react'
+import toast from 'react-hot-toast'
 
 export default function SavedPage() {
   const { plans, loading, deletePlan, loadPlan } = usePlans()
   const { profile } = useAuth()
   const navigate    = useNavigate()
-  const { loadPlan: storeLoadPlan } = usePlanStore()
+  const { loadPlan: storeLoadPlan, servings } = usePlanStore()
 
   const [expandedId,    setExpandedId]    = useState(null)
   const [deletingId,    setDeletingId]    = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
 
-  function handleLoadGrocery(plan) { storeLoadPlan(loadPlan(plan)); navigate('/grocery') }
-  function handleLoadPlanner(plan) { storeLoadPlan(loadPlan(plan)); navigate('/planner') }
-  function handlePDF(plan)         { exportToPDF(loadPlan(plan), profile?.username) }
+  function handleLoadGrocery(plan) { storeLoadPlan(loadPlan(plan)); toast.success(`Loaded "${plan.name}"`); navigate('/grocery') }
+  function handleLoadPlanner(plan) { storeLoadPlan(loadPlan(plan)); toast.success(`Loaded "${plan.name}" into planner`); navigate('/planner') }
+  function handlePDF(plan)         { exportToPDF(loadPlan(plan), profile?.username, servings) }
 
   async function handleDelete(plan) {
     setDeletingId(plan.id)
@@ -114,6 +115,9 @@ export default function SavedPage() {
 
                 {/* Action buttons */}
                 <div className="flex gap-2 flex-wrap shrink-0">
+                  <button onClick={() => handleLoadPlanner(plan)} className="btn-primary btn-sm btn gap-2">
+                    <CalendarCheck size={14} /> Load into planner
+                  </button>
                   <button onClick={() => setExpandedId(isExpanded ? null : plan.id)} className="btn-secondary btn-sm btn gap-2">
                     {isExpanded ? <EyeOff size={14} /> : <Eye size={14} />}
                     {isExpanded ? 'Collapse' : 'View'}
@@ -183,7 +187,7 @@ export default function SavedPage() {
 
       {/* Delete confirm modal */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}>
           <div className="w-full max-w-sm card p-7 text-center" style={{ animation: 'scaleIn 0.2s ease' }}>
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4"

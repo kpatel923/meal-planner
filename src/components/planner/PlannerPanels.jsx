@@ -4,7 +4,7 @@ import { weeklyTimeTotal, formatPrepTime } from '../../lib/mealFacts'
 import { weeklyBudgetTotal, formatCost } from '../../lib/budget'
 import {
   ShoppingCart, ArrowLeftRight, Wand2, Receipt, Clock, DollarSign,
-  FileDown, Printer, Link as LinkIcon, Users, Undo2, ChevronRight,
+  FileDown, Printer, Link as LinkIcon, Users, Undo2, ChevronRight, Bookmark,
 } from 'lucide-react'
 
 // ── Week overview: headline time/cost + stat tiles + prep progress ──
@@ -132,8 +132,9 @@ export function AIPrompts({ onSwapSuggest, onRegenerate, onWhatCanIMake }) {
 }
 
 // ── Quick actions list ─────────────────────────────────────────────
-export function QuickActions({ onPDF, onPrint, onCopyLink, onShareHousehold, onUndoGenerate, canUndo }) {
+export function QuickActions({ onPDF, onPrint, onCopyLink, onShareHousehold, onUndoGenerate, canUndo, onLoadSaved, hasSavedPlans }) {
   const actions = [
+    ...(hasSavedPlans ? [{ icon: Bookmark, label: 'Load a saved plan', onClick: onLoadSaved }] : []),
     { icon: FileDown, label: 'Export as PDF', onClick: onPDF },
     { icon: Printer, label: 'Print grocery list', onClick: onPrint },
     { icon: LinkIcon, label: 'Copy shareable link', onClick: onCopyLink },

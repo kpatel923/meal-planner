@@ -4,7 +4,7 @@ import { DIET_LABELS } from '../lib/mealLogic'
 import { estimateNutrition } from '../lib/nutrition'
 import { estimateCost, getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
 import { formatPrepTime } from '../lib/mealFacts'
-import { Sparkles, X, Edit2, Trash2, Play, Camera, FileText, Flame, Loader2, Clock } from 'lucide-react'
+import { Sparkles, X, Edit2, Trash2, Play, Camera, FileText, Flame, Loader2, Clock, Heart } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export const DIET_COLORS = {
@@ -35,7 +35,7 @@ export function getVideoMeta(url) {
  * onEdit / onDelete are optional — pass nothing to hide those actions
  * (e.g. when viewing a meal from a read-only context).
  */
-export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
+export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onToggleFavorite }) {
   const [sharing, setSharing] = useState(false)
   if (!meal) return null
 
@@ -207,6 +207,13 @@ export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete }) {
             {sharing ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
             Share
           </button>
+          {onToggleFavorite && (
+            <button onClick={() => onToggleFavorite(meal)} className="btn-secondary btn tap-target"
+              aria-label={meal.is_favorite ? 'Unfavorite' : 'Favorite'}
+              style={{ color: meal.is_favorite ? 'var(--danger)' : 'var(--text-2)' }}>
+              <Heart size={16} fill={meal.is_favorite ? 'var(--danger)' : 'none'} />
+            </button>
+          )}
           {onEdit && (
             <button onClick={() => onEdit(meal)} className="btn-secondary btn flex-1 tap-target">
               <Edit2 size={16} /> Edit

@@ -33,7 +33,12 @@ function PublicRoute({ children }) {
 function ToastWrapper() {
   const { isDark } = useTheme()
   return (
-    <Toaster position="top-center" toastOptions={{
+    <Toaster position="top-center"
+      containerStyle={{
+        // Push toasts clear of the notch / status bar on phones.
+        top: 'calc(env(safe-area-inset-top, 0px) + 12px)',
+      }}
+      toastOptions={{
       duration: 3500,
       style: {
         background:   isDark ? '#242018' : '#fff',
@@ -44,9 +49,10 @@ function ToastWrapper() {
         fontSize:     '14px',
         fontFamily:   'Inter, sans-serif',
         padding:      '12px 18px',
+        maxWidth:     '90vw',
       },
-      success: { iconTheme: { primary: '#1F9E62', secondary: '#fff' } },
-      error:   { iconTheme: { primary: '#D4502A', secondary: '#fff' } },
+      success: { iconTheme: { primary: '#7CB518', secondary: '#fff' } },
+      error:   { iconTheme: { primary: '#D43D2B', secondary: '#fff' } },
     }} />
   )
 }

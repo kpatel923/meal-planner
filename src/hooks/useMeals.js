@@ -77,6 +77,23 @@ export function useMeals(filters = {}) {
     return { data }
   }
 
+  async function toggleFavorite(id, current) {
+    // optimistic update — favoriting should feel instant, no toast spam
+    setMeals(prev => prev.map(m => m.id === id ? { ...m, is_favorite: !current } : m))
+    const { error } = await supabase
+      .from('meals')
+      .update({ is_favorite: !current })
+      .eq('id', id)
+      .eq('user_id', user.id)
+    if (error) {
+      // revert on failure
+      setMeals(prev => prev.map(m => m.id === id ? { ...m, is_favorite: current } : m))
+      toast.error('Could not update favorite')
+      return { error }
+    }
+    return {}
+  }
+
   async function deleteMeal(id) {
     const { error } = await supabase
       .from('meals')
@@ -124,5 +141,5 @@ export function useMeals(filters = {}) {
     return {}
   }
 
-  return { meals, loading, error, addMeal, updateMeal, deleteMeal, deleteAllMeals, bulkAddMeals, refetch: fetchMeals }
+  return { meals, loading, error, addMeal, updateMeal, deleteMeal, deleteAllMeals, toggleFavorite, bulkAddMeals, refetch: fetchMeals }
 }

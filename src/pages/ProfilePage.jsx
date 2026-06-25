@@ -7,7 +7,7 @@ import { usePlanStore } from '../hooks/usePlanStore'
 import { exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
 import { getMostUsedMeals } from '../lib/avoidRepeats'
 import { weeklyBudgetTotal, budgetToTier, formatCost, BUDGET_TAG_STYLES } from '../lib/budget'
-import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, DollarSign, Award, Trash2 } from 'lucide-react'
+import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, DollarSign, Award, Trash2, Package, Target, Plus, Flame } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
@@ -37,6 +37,12 @@ export default function ProfilePage() {
   const [weeklyBudget, setWeeklyBudgetLocal] = useState(profile?.weekly_budget || 75)
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false)
   const [deletingAll, setDeletingAll] = useState(false)
+  const [pantryItems, setPantryItems] = useState(profile?.pantry_items || [])
+  const [pantryInput, setPantryInput] = useState('')
+  const [savingPantry, setSavingPantry] = useState(false)
+  const [dailyCalories, setDailyCalories] = useState(profile?.daily_calories != null ? String(profile.daily_calories) : '')
+  const [dailyProtein, setDailyProtein] = useState(profile?.daily_protein != null ? String(profile.daily_protein) : '')
+  const [savingGoals, setSavingGoals] = useState(false)
   const [mostUsed,     setMostUsed]     = useState([])
   const [loadingUsage, setLoadingUsage] = useState(true)
 
@@ -106,6 +112,31 @@ export default function ProfilePage() {
     const { error } = await deleteAllMeals()
     setDeletingAll(false)
     if (!error) setConfirmDeleteAll(false)
+  }
+
+  function addPantryItem() {
+    const v = pantryInput.trim().toLowerCase()
+    if (!v) return
+    if (pantryItems.includes(v)) { toast.error('Already in your pantry'); setPantryInput(''); return }
+    setPantryItems(prev => [...prev, v])
+    setPantryInput('')
+  }
+  function removePantryItem(item) {
+    setPantryItems(prev => prev.filter(i => i !== item))
+  }
+  async function handleSavePantry() {
+    setSavingPantry(true)
+    const { error } = await updateProfile({ pantry_items: pantryItems })
+    setSavingPantry(false)
+    if (error) toast.error('Could not save pantry'); else toast.success('Pantry saved')
+  }
+
+  async function handleSaveGoals() {
+    setSavingGoals(true)
+    const toInt = v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : null }
+    const { error } = await updateProfile({ daily_calories: toInt(dailyCalories), daily_protein: toInt(dailyProtein) })
+    setSavingGoals(false)
+    if (error) toast.error('Could not save goals'); else toast.success('Goals saved')
   }
 
   // Budget comparison: what tier does this weekly budget land in, and what's the live plan costing?
@@ -318,6 +349,71 @@ export default function ProfilePage() {
         <button onClick={handleSaveBudget} disabled={savingBudget} className="btn-primary btn tap-target mt-4">
           {savingBudget ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
           Save budget settings
+        </button>
+      </div>
+
+      {/* ── Pantry staples ────────────────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.185s both' }}>
+        <h3 className="font-semibold mb-1 flex items-center gap-2" style={{ fontSize: '16px', color: 'var(--text)' }}>
+          <Package size={17} style={{ color: 'var(--brand)' }} /> Pantry staples
+        </h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '16px' }}>
+          Items you always keep stocked. These are hidden from your grocery lists so you only shop for what you actually need.
+        </p>
+        <div className="flex gap-2 mb-3">
+          <input className="input flex-1" placeholder="Add a staple (e.g. salt, olive oil)…"
+            value={pantryInput} onChange={e => setPantryInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addPantryItem()} />
+          <button onClick={addPantryItem} disabled={!pantryInput.trim()} className="btn-primary btn gap-1.5 tap-target">
+            <Plus size={15} /> Add
+          </button>
+        </div>
+        {pantryItems.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {pantryItems.map(item => (
+              <span key={item} className="flex items-center gap-1.5 capitalize"
+                style={{ fontSize: 12.5, padding: '5px 10px', borderRadius: 99, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}>
+                {item}
+                <button onClick={() => removePantryItem(item)} aria-label={`Remove ${item}`} style={{ color: 'var(--text-3)', display: 'flex' }}>
+                  <X size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p style={{ fontSize: 12.5, color: 'var(--text-3)' }}>No staples yet. Common ones: salt, pepper, olive oil, flour, sugar.</p>
+        )}
+        {pantryItems.length > 0 && (
+          <button onClick={handleSavePantry} disabled={savingPantry} className="btn-primary btn tap-target mt-4">
+            {savingPantry ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+            Save pantry
+          </button>
+        )}
+      </div>
+
+      {/* ── Nutrition goals ───────────────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.188s both' }}>
+        <h3 className="font-semibold mb-1 flex items-center gap-2" style={{ fontSize: '16px', color: 'var(--text)' }}>
+          <Target size={17} style={{ color: 'var(--brand)' }} /> Daily nutrition goals
+        </h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '16px' }}>
+          Optional targets. When set, each day in your planner shows progress toward them. Leave blank for no goal.
+        </p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="input-label flex items-center gap-1.5"><Flame size={11} /> Calories / day</label>
+            <input className="input" type="number" min="0" inputMode="numeric"
+              value={dailyCalories} onChange={e => setDailyCalories(e.target.value)} placeholder="e.g. 2000" />
+          </div>
+          <div>
+            <label className="input-label">Protein / day (g)</label>
+            <input className="input" type="number" min="0" inputMode="numeric"
+              value={dailyProtein} onChange={e => setDailyProtein(e.target.value)} placeholder="e.g. 120" />
+          </div>
+        </div>
+        <button onClick={handleSaveGoals} disabled={savingGoals} className="btn-primary btn tap-target mt-4">
+          {savingGoals ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Save goals
         </button>
       </div>
 

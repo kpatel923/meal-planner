@@ -4,25 +4,32 @@
 
 @layer base {
   :root {
-    /* Paper — warm, desaturated, not cream-Pinterest, not stark white */
-    --bg:         #FAFAF8;
+    /* Neutrals — clean, slightly cool paper to pair with charcoal/lime */
+    --bg:         #F7F8F6;
     --surface:    #FFFFFF;
-    --surface-2:  #F3F2EE;
-    --surface-3:  #EAE8E2;
-    --border:     #E8E6E1;
-    --border-2:   #D8D5CD;
-    --text:       #161614;
-    --text-2:     #6B6862;
-    --text-3:     #9C9892;
+    --surface-2:  #EFF1EC;
+    --surface-3:  #E4E7DE;
+    --border:     #E4E7DE;
+    --border-2:   #D3D7CA;
+    --text:       #16170F;
+    --text-2:     #5E6155;
+    --text-3:     #969A8B;
 
-    /* Ember — the single signature accent. Warm coral-orange, stove/flame coded,
-       deliberately not the generic "healthy green" every meal app reaches for. */
-    --brand:       #FF5A36;
-    --brand-dark:  #E8431F;
-    --brand-light: #FFF1EC;
-    --brand-text:  #993C1D; /* AA-safe on brand-light */
+    /* Charcoal & Lime — charcoal is the primary UI color (buttons, headers),
+       lime-chartreuse is the energetic signature accent. High-contrast,
+       sporty, deliberately not the generic "healthy green" of every meal app. */
+    --brand:       #1A1C16;   /* charcoal — primary actions */
+    --brand-dark:  #000000;
+    --brand-light: #EEF2E0;   /* soft lime tint for fills */
+    --brand-text:  #3A4220;   /* AA-safe on brand-light */
 
-    /* Basil — reserved ONLY for done/success states, never primary UI */
+    /* Lime accent — for highlights, active states, energy */
+    --accent:        #7CB518;
+    --accent-dark:   #6BA00F;
+    --accent-light:  #EEF6DC;
+    --accent-text:   #3F5C0C;
+
+    /* Reserved ONLY for done/success states */
     --success:       #1A8F5C;
     --success-light: #E6F5EE;
     --danger:         #D43D2B;
@@ -33,20 +40,26 @@
     --radius-lg: 22px;
   }
   .dark {
-    --bg:         #121210;
-    --surface:    #1B1A17;
-    --surface-2:  #221F1C;
-    --surface-3:  #2C2925;
-    --border:     #322F2A;
-    --border-2:   #3E3A34;
-    --text:       #F5F4F1;
-    --text-2:     #ABA79F;
-    --text-3:     #726E67;
+    --bg:         #101210;
+    --surface:    #181B17;
+    --surface-2:  #1F231D;
+    --surface-3:  #282D25;
+    --border:     #2D322A;
+    --border-2:   #3A4035;
+    --text:       #F3F5F0;
+    --text-2:     #A7AC9F;
+    --text-3:     #6F7567;
 
-    --brand:       #FF6B45;
-    --brand-dark:  #FF5A36;
-    --brand-light: rgba(255,90,54,0.14);
-    --brand-text:  #FFB59A;
+    /* In dark mode charcoal can't be the primary (it vanishes), so lime leads. */
+    --brand:       #8FCC2A;
+    --brand-dark:  #7CB518;
+    --brand-light: rgba(124,181,24,0.16);
+    --brand-text:  #C3E87A;
+
+    --accent:        #8FCC2A;
+    --accent-dark:   #7CB518;
+    --accent-light:  rgba(124,181,24,0.16);
+    --accent-text:   #C3E87A;
 
     --success:       #34B57E;
     --success-light: rgba(26,143,92,0.16);
@@ -85,7 +98,7 @@
   }
 
   h1,h2,h3,h4,h5 { @apply font-display; letter-spacing: -0.02em; }
-  ::selection { background: rgba(255,90,54,0.18); color: var(--text); }
+  ::selection { background: rgba(124,181,24,0.22); color: var(--text); }
   :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
 
   /* Tabular numerals everywhere a number needs to line up — calories, prices, day counts */
@@ -130,9 +143,9 @@
   .btn-primary {
     @apply btn text-white;
     background: var(--brand);
-    box-shadow: 0 2px 10px rgba(255,90,54,0.28);
+    box-shadow: 0 2px 10px rgba(22,23,15,0.18);
   }
-  .btn-primary:hover  { background: var(--brand-dark); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(255,90,54,0.36); }
+  .btn-primary:hover  { background: var(--brand-dark); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(22,23,15,0.22); }
   .btn-primary:active { transform: scale(0.96) translateY(0); }
 
   .btn-secondary {
@@ -226,12 +239,23 @@
     border: 1px solid var(--border);
     border-radius: 24px;
     box-shadow: 0 24px 60px rgba(22,22,20,0.18);
-    max-width: 600px; width: 100%; max-height: 85vh; overflow-y: auto;
+    max-width: 600px; width: 100%;
+    max-height: 85vh;            /* fallback for old browsers */
+    max-height: 85dvh;           /* dynamic viewport — accounts for mobile toolbars */
+    overflow-y: auto;
     animation: modalIn 0.28s cubic-bezier(0.22,1,0.36,1);
     -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
   @media (max-width: 640px) {
-    .modal-panel { border-radius: 24px 24px 0 0; max-height: 92vh; animation: sheetIn 0.3s cubic-bezier(0.22,1,0.36,1); }
+    .modal-panel {
+      border-radius: 24px 24px 0 0;
+      max-height: 85vh;
+      max-height: 85dvh;
+      /* Pad the scrollable bottom so the last buttons clear the home indicator. */
+      padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
+      animation: sheetIn 0.3s cubic-bezier(0.22,1,0.36,1);
+    }
   }
 
   .tap-target { min-height: 44px; min-width: 44px; }
@@ -328,7 +352,7 @@
   .day-tab.is-today {
     background: var(--brand);
     transform: translateY(-8px);
-    box-shadow: 0 6px 20px rgba(255,90,54,0.32);
+    box-shadow: 0 6px 20px rgba(22,23,15,0.20);
   }
 
   /* ── GLASS (mobile nav) ───────────────────────────────── */
@@ -347,6 +371,9 @@
   }
 
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  /* For bottom-anchored modal wrappers on mobile: keep content clear of the
+     home indicator and the bottom nav. */
+  .modal-safe { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
   .safe-top { padding-top: env(safe-area-inset-top); }
   /* Horizontal insets matter in landscape on notched phones. */
   .safe-x { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }

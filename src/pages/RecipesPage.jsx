@@ -7,13 +7,15 @@ import { DIET_LABELS, CATEGORIES } from '../lib/mealLogic'
 import { nutritionColor } from '../lib/nutrition'
 import { getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
-import { parseRecipeFromURL } from '../lib/aiFeatures'
+import { SEED_RECIPES } from '../lib/seedRecipes'
+import { parseRecipeFromURL, analyzeMealPhoto } from '../lib/aiFeatures'
+import { fileToCompressedDataURL } from '../lib/imageUtils'
 import RecipeDetailModal, { DIET_COLORS, SOURCE_BADGES, CAT_ICONS, getVideoMeta } from '../components/RecipeDetailModal'
 import {
-  Plus, Search, Upload, Download, Edit2, Trash2,
+  Plus, Search, Upload, Download,
   Loader2, X, BookOpen, AlertTriangle, ChevronDown,
-  ExternalLink, Link2, Play, Camera, FileText,
-  Sparkles, Clock, Users, ImagePlus, Wand2, Flame,
+  Play, Camera, FileText,
+  Sparkles, Clock, ImagePlus, Wand2, Flame, Heart,
   DollarSign, Trash
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -26,6 +28,9 @@ export default function RecipesPage() {
   const [search,       setSearch]       = useState('')
   const [catFilter,    setCatFilter]    = useState('')
   const [dietFilter,   setDietFilter]   = useState([])
+  const [favsOnly,     setFavsOnly]     = useState(false)
+  const [seeding,      setSeeding]      = useState(false)
+  const [analyzingPhoto, setAnalyzingPhoto] = useState(false)
   const [showForm,     setShowForm]     = useState(false)
   const [editMeal,     setEditMeal]     = useState(null)
   const [viewMeal,     setViewMeal]     = useState(null)   // recipe detail modal target
@@ -41,6 +46,7 @@ export default function RecipesPage() {
   const [showDetect,   setShowDetect]   = useState(false)
   const fileRef   = useRef(null)
   const photoRef  = useRef(null)
+  const analyzePhotoRef = useRef(null)
   const exportRef = useRef(null)
 
   useEffect(() => {
@@ -51,11 +57,19 @@ export default function RecipesPage() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [])
 
-  const { meals, loading, addMeal, updateMeal, deleteMeal, bulkAddMeals } = useMeals({
+  const { meals, loading, addMeal, updateMeal, deleteMeal, toggleFavorite, bulkAddMeals } = useMeals({
     search:     search || undefined,
     category:   catFilter || undefined,
     diet_types: dietFilter.length ? dietFilter : undefined,
   })
+
+  async function handleAddStarters() {
+    setSeeding(true)
+    const payload = SEED_RECIPES.map(r => ({ ...r, source: 'manual' }))
+    const { error } = await bulkAddMeals(payload)
+    setSeeding(false)
+    if (!error) toast.success(`Added ${SEED_RECIPES.length} starter recipes!`)
+  }
 
   function openAdd()       { setForm(EMPTY); setEditMeal(null); setShowDetect(false); setDetectUrl(''); setShowForm(true) }
   function openEdit(meal)  {
@@ -135,6 +149,33 @@ export default function RecipesPage() {
     setDetecting(false)
   }
 
+  // Auto-fill the form from a food photo using AI vision (same as the AI page).
+  async function handleAnalyzePhoto(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setAnalyzingPhoto(true)
+    const toastId = toast.loading('Analyzing photo…')
+    try {
+      const dataUrl = await fileToCompressedDataURL(file)
+      const result = await analyzeMealPhoto(dataUrl)
+      setForm(p => ({
+        ...p,
+        item_name:   result.name || p.item_name,
+        category:    result.category || p.category,
+        diet_type:   result.diet_type || p.diet_type,
+        ingredients: result.ingredients || p.ingredients,
+        prep_time:   result.prepTime != null ? String(result.prepTime) : p.prep_time,
+        calories:    result.calories != null ? String(result.calories) : p.calories,
+        detail_notes: result.description || p.detail_notes,
+      }))
+      toast.success('Filled in from photo — review before saving', { id: toastId })
+    } catch (err) {
+      toast.error(err.message || 'Could not read that photo', { id: toastId, duration: 5000 })
+    }
+    setAnalyzingPhoto(false)
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     if (!form.item_name.trim() || !form.ingredients.trim()) { toast.error('Name and ingredients required'); return }
@@ -177,7 +218,8 @@ export default function RecipesPage() {
     setImporting(false); fileRef.current.value = ''
   }
 
-  const grouped = CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat]: meals.filter(m => m.category === cat) }), {})
+  const visibleMeals = favsOnly ? meals.filter(m => m.is_favorite) : meals
+  const grouped = CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat]: visibleMeals.filter(m => m.category === cat) }), {})
   const showCats = catFilter ? [catFilter] : CATEGORIES
 
   return (
@@ -267,6 +309,11 @@ export default function RecipesPage() {
               </button>
             )
           })}
+          <button onClick={() => setFavsOnly(v => !v)}
+            className="px-4 py-2.5 rounded-full font-semibold transition-all duration-200 active:scale-95 tap-target flex items-center gap-1.5"
+            style={{ fontSize:'13.5px', background: favsOnly ? 'var(--danger-light)' : 'var(--surface-2)', color: favsOnly ? 'var(--danger)' : 'var(--text-2)' }}>
+            <Heart size={13} fill={favsOnly ? 'var(--danger)' : 'none'} /> Favorites
+          </button>
         </div>
       </div>
 
@@ -281,8 +328,24 @@ export default function RecipesPage() {
             style={{ background:'var(--surface-2)', border:'1px solid var(--border)', fontSize:'36px' }}>
             <BookOpen size={32} style={{ color:'var(--text-3)' }} />
           </div>
-          <p className="font-display font-semibold mb-2" style={{ fontSize:'22px', color:'var(--text)', letterSpacing:'-0.03em' }}>No meals found</p>
-          <p style={{ color:'var(--text-3)', fontSize:'15px' }}>Try a different filter, or add a new meal above.</p>
+          {(search || catFilter || dietFilter.length || favsOnly) ? (
+            <>
+              <p className="font-display font-semibold mb-2" style={{ fontSize:'22px', color:'var(--text)', letterSpacing:'-0.03em' }}>No meals found</p>
+              <p style={{ color:'var(--text-3)', fontSize:'15px' }}>Try a different filter, or add a new meal above.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-display font-semibold mb-2" style={{ fontSize:'22px', color:'var(--text)', letterSpacing:'-0.03em' }}>Your library is empty</p>
+              <p style={{ color:'var(--text-3)', fontSize:'15px', maxWidth: 360, marginBottom: 20 }}>
+                Add your own recipes, or start instantly with a handful of balanced everyday meals you can edit anytime.
+              </p>
+              <button onClick={handleAddStarters} disabled={seeding}
+                className="btn-primary btn btn-lg tap-target gap-2">
+                {seeding ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                Add {SEED_RECIPES.length} starter recipes
+              </button>
+            </>
+          )}
         </div>
       ) : (
         <div className="space-y-12">
@@ -333,9 +396,17 @@ export default function RecipesPage() {
                             <h3 className="font-semibold leading-snug" style={{ fontSize:'16.5px', color:'var(--text)', letterSpacing:'-0.02em' }}>
                               {meal.item_name}
                             </h3>
-                            <span className="badge shrink-0" style={{ background:dc.bg, color:dc.text }}>
-                              {DIET_LABELS[meal.diet_type]?.label}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button onClick={(e) => { e.stopPropagation(); toggleFavorite(meal.id, meal.is_favorite) }}
+                                aria-label={meal.is_favorite ? 'Unfavorite' : 'Favorite'}
+                                className="flex items-center justify-center rounded-lg tap-target transition-all"
+                                style={{ width: 30, height: 30, color: meal.is_favorite ? 'var(--danger)' : 'var(--text-3)' }}>
+                                <Heart size={16} fill={meal.is_favorite ? 'var(--danger)' : 'none'} />
+                              </button>
+                              <span className="badge" style={{ background:dc.bg, color:dc.text }}>
+                                {DIET_LABELS[meal.diet_type]?.label}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Ingredients */}
@@ -405,10 +476,11 @@ export default function RecipesPage() {
       {/* Recipe Detail Modal */}
       {viewMeal && (
         <RecipeDetailModal
-          meal={viewMeal}
+          meal={meals.find(m => m.id === viewMeal.id) || viewMeal}
           onClose={() => setViewMeal(null)}
           onEdit={openEdit}
           onDelete={(m) => setDeleteTarget(m)}
+          onToggleFavorite={(m) => toggleFavorite(m.id, m.is_favorite)}
         />
       )}
 
@@ -424,15 +496,24 @@ export default function RecipesPage() {
               <button onClick={closeForm} className="btn-ghost btn-icon tap-target"><X size={20} /></button>
             </div>
 
-            {/* Auto-detect from URL */}
+            {/* Auto-fill from URL or photo */}
             {!editMeal && (
               <div className="px-6 sm:px-7 pt-5">
                 {!showDetect ? (
-                  <button onClick={() => setShowDetect(true)} type="button"
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold transition-all tap-target"
-                    style={{ fontSize:'13.5px', background:'rgba(139,95,191,0.08)', border:'1px dashed rgba(139,95,191,0.3)', color:'#8B5FBF' }}>
-                    <Wand2 size={15} /> Auto-fill from a recipe URL
-                  </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button onClick={() => setShowDetect(true)} type="button"
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold transition-all tap-target"
+                      style={{ fontSize:'13.5px', background:'rgba(139,95,191,0.08)', border:'1px dashed rgba(139,95,191,0.3)', color:'#8B5FBF' }}>
+                      <Wand2 size={15} /> Auto-fill from URL
+                    </button>
+                    <button onClick={() => analyzePhotoRef.current?.click()} type="button" disabled={analyzingPhoto}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold transition-all tap-target"
+                      style={{ fontSize:'13.5px', background:'var(--brand-light)', border:'1px dashed var(--brand)', color:'var(--brand-text)' }}>
+                      {analyzingPhoto ? <Loader2 size={15} className="animate-spin" /> : <Camera size={15} />}
+                      {analyzingPhoto ? 'Analyzing…' : 'Auto-fill from photo'}
+                    </button>
+                    <input ref={analyzePhotoRef} type="file" accept="image/*" className="hidden" onChange={handleAnalyzePhoto} />
+                  </div>
                 ) : (
                   <div className="p-4 rounded-2xl" style={{ background:'rgba(139,95,191,0.06)', border:'1px solid rgba(139,95,191,0.2)' }}>
                     <p className="font-semibold mb-2 flex items-center gap-1.5" style={{ fontSize:'13px', color:'#8B5FBF' }}>
@@ -451,6 +532,8 @@ export default function RecipesPage() {
                     <p style={{ fontSize:'11px', color:'var(--text-3)', marginTop:'8px' }}>
                       AI infers details from the URL — always review before saving.
                     </p>
+                    <button onClick={() => setShowDetect(false)} type="button"
+                      style={{ fontSize:'12px', color:'var(--text-3)', marginTop:'8px' }}>← Back</button>
                   </div>
                 )}
               </div>

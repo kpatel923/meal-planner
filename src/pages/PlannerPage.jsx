@@ -26,7 +26,7 @@ import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
   CalendarPlus, RefreshCw, BarChart3,
-  ShoppingCart, MoreHorizontal,
+  ShoppingCart, MoreHorizontal, Bookmark,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -50,11 +50,11 @@ export default function PlannerPage() {
     weeklyPlan, generating, dietTypes, servings, avoidRepeats,
     undoStack, prevPlanSnapshot, planDesc,
     setDietTypes, setServings, setAvoidRepeats, setPlanDesc,
-    generate, regenerateDay, swapMeal, undoSwap, clearUndo,
+    generate, regenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
     undoGenerate, clearUndoGenerate,
     clearPlan, togglePrep, isPrepDone, prepProgress,
   } = usePlanStore()
-  const { savePlan } = usePlans()
+  const { savePlan, plans } = usePlans()
 
   // ── Local UI state ────────────────────────────────────────────────
   const [activeDay,      setActiveDay]      = useState(() => {
@@ -62,8 +62,10 @@ export default function PlannerPage() {
   })
   const [planName,       setPlanName]       = useState('')
   const [saving,         setSaving]         = useState(false)
-  const [confirmRegen,   setConfirmRegen]   = useState(false)
+  const [showRegenModal, setShowRegenModal] = useState(false)
+  const [regenSaveName,  setRegenSaveName]  = useState('')
   const [swapTarget,     setSwapTarget]     = useState(null)
+  const [moveTarget,     setMoveTarget]     = useState(null)
   const [swapSearch,     setSwapSearch]     = useState('')
   const [showShareModal, setShowShareModal] = useState(false)
   const [shareType,      setShareType]      = useState('plan')
@@ -74,7 +76,7 @@ export default function PlannerPage() {
   const [mobileSheet,    setMobileSheet]    = useState(null) // 'overview' | 'grocery' | 'ai' | 'actions' | null
 
   // Single meals fetch — filter client-side instead of a second query.
-  const { meals: allMeals, loading: mealsLoading } = useMeals()
+  const { meals: allMeals, loading: mealsLoading, toggleFavorite } = useMeals()
   const filteredMeals = useMemo(
     () => allMeals.filter(m => dietTypes.includes(m.diet_type)),
     [allMeals, dietTypes],
@@ -94,8 +96,14 @@ export default function PlannerPage() {
 
   async function handleGenerate() {
     if (!dietTypes.length) { toast.error('Select at least one diet type'); return }
-    if (weeklyPlan && !confirmRegen) { setConfirmRegen(true); return }
-    setConfirmRegen(false)
+    // If a plan is already showing, warn that regenerating replaces the
+    // auto-saved one (unless it was manually saved). Otherwise generate freely.
+    if (weeklyPlan) { setShowRegenModal(true); return }
+    doGenerate()
+  }
+
+  async function doGenerate() {
+    setShowRegenModal(false)
     try {
       const plan = await generate(filteredMeals, user?.id, profile?.budget_mode || false)
       toast.success('Week generated!')
@@ -104,6 +112,16 @@ export default function PlannerPage() {
     } catch {
       toast.error('Not enough meals — add more recipes first.')
     }
+  }
+
+  async function handleSaveThenGenerate() {
+    const name = regenSaveName.trim() || `Plan ${new Date().toLocaleDateString()}`
+    setSaving(true)
+    await savePlan(name, weeklyPlan)
+    setSaving(false)
+    setRegenSaveName('')
+    toast.success(`Saved "${name}"`)
+    doGenerate()
   }
 
   async function handleRegenerateDay(dayIdx) {
@@ -135,6 +153,14 @@ export default function PlannerPage() {
   }
 
   function openSwap(dayIdx, category) { setSwapTarget({ dayIdx, category }); setSwapSearch('') }
+
+  function openMove(dayIdx, category) { setMoveTarget({ dayIdx, category }) }
+  function handleMoveTo(toDayIdx, toCategory) {
+    if (!moveTarget) return
+    reorderMeal(moveTarget.dayIdx, moveTarget.category, toDayIdx, toCategory)
+    toast.success(`Moved to ${DAYS[toDayIdx]} ${toCategory}`, { icon: '↔️' })
+    setMoveTarget(null)
+  }
   function closeSwap() { setSwapTarget(null); setSwapSearch('') }
 
   function handleSwapSelect(meal) {
@@ -150,6 +176,16 @@ export default function PlannerPage() {
     if (!swapTarget) return
     swapMeal(swapTarget.dayIdx, swapTarget.category, makeEatingOutMeal(swapTarget.category))
     toast.success('Marked as eating out', { icon: '🍴' })
+    closeSwap()
+  }
+
+  function handleSurpriseMe() {
+    if (!swapTarget) return
+    const pool = filteredMeals.filter(m => m.category === swapTarget.category)
+    if (!pool.length) { toast.error(`No ${swapTarget.category} meals to pick from`); return }
+    const pick = pool[Math.floor(Math.random() * pool.length)]
+    swapMeal(swapTarget.dayIdx, swapTarget.category, pick)
+    toast.success(`Surprise — ${pick.item_name}!`, { icon: '🎲' })
     closeSwap()
   }
 
@@ -252,20 +288,12 @@ export default function PlannerPage() {
                 </button>
               )}
 
-              {confirmRegen ? (
-                <div className="flex items-center gap-2" style={{ animation: 'slideDown 0.2s ease' }}>
-                  <span className="hidden sm:inline" style={{ fontSize: 13, color: 'var(--text-3)' }}>Overwrite?</span>
-                  <button onClick={handleGenerate} className="btn-primary btn-sm btn">Yes</button>
-                  <button onClick={() => setConfirmRegen(false)} className="btn-secondary btn-sm btn">No</button>
-                </div>
-              ) : (
-                <button onClick={handleGenerate} disabled={generating || !dietTypes.length}
-                  className="btn-primary btn tap-target gap-2" style={{ height: 36 }}>
-                  {generating
-                    ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
-                    : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span></>}
-                </button>
-              )}
+              <button onClick={handleGenerate} disabled={generating || !dietTypes.length}
+                className="btn-primary btn tap-target gap-2" style={{ height: 36 }}>
+                {generating
+                  ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
+                  : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span></>}
+              </button>
             </div>
           </div>
 
@@ -340,7 +368,8 @@ export default function PlannerPage() {
         {/* ── Day content ── */}
         <div className="flex-1 px-4 sm:px-6 lg:px-8 py-5 pb-40 lg:pb-8">
           {!weeklyPlan ? (
-            <EmptyPlan generating={generating} onGenerate={handleGenerate} mealCount={filteredMeals.length} />
+            <EmptyPlan generating={generating} onGenerate={handleGenerate} mealCount={filteredMeals.length}
+              hasSavedPlans={plans?.length > 0} onLoadSaved={() => navigate('/saved')} />
           ) : (
             <div key={activeDay} className="day-content-in" style={{ maxWidth: 640, margin: '0 auto' }}>
               {/* Day header */}
@@ -396,6 +425,20 @@ export default function PlannerPage() {
                 </div>
               )}
 
+              {/* Nutrition goal progress (only when goals are set) */}
+              {dayPlanned.length > 0 && activeDayNutrition && (profile?.daily_calories || profile?.daily_protein) && (
+                <div className="rounded-2xl mb-4 p-3.5" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                  {profile?.daily_calories ? (
+                    <GoalBar label="Calories" current={activeDayNutrition.calories || 0} goal={profile.daily_calories} unit="" />
+                  ) : null}
+                  {profile?.daily_protein ? (
+                    <div style={{ marginTop: profile?.daily_calories ? 10 : 0 }}>
+                      <GoalBar label="Protein" current={Math.round(activeDayNutrition.protein_g || 0)} goal={profile.daily_protein} unit="g" />
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
               {/* Meal rows / empty day */}
               {dayPlanned.length === 0 ? (
                 <EmptyDay
@@ -412,6 +455,7 @@ export default function PlannerPage() {
                       prepped={isPrepDone(activeDay, cat)}
                       onTogglePrep={() => togglePrep(activeDay, cat)}
                       onSwap={() => openSwap(activeDay, cat)}
+                      onMove={() => openMove(activeDay, cat)}
                       onView={(m) => setViewMeal(m)}
                       onAdd={() => openSwap(activeDay, cat)}
                       animDelay={i * 45}
@@ -475,6 +519,8 @@ export default function PlannerPage() {
               onShareHousehold={() => navigate('/household')}
               onUndoGenerate={undoGenerate}
               canUndo={!!prevPlanSnapshot}
+              onLoadSaved={() => navigate('/saved')}
+              hasSavedPlans={plans?.length > 0}
             />
           </PanelSection>
         </aside>
@@ -534,6 +580,8 @@ export default function PlannerPage() {
           onShareHousehold={() => { setMobileSheet(null); navigate('/household') }}
           onUndoGenerate={() => { setMobileSheet(null); undoGenerate() }}
           canUndo={!!prevPlanSnapshot}
+          onLoadSaved={() => { setMobileSheet(null); navigate('/saved') }}
+          hasSavedPlans={plans?.length > 0}
         />
       </MobileSheet>
 
@@ -549,10 +597,10 @@ export default function PlannerPage() {
 
       {/* ════════ Swap modal ════════ */}
       {swapTarget && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && closeSwap()}>
-          <div className="w-full max-w-md card flex flex-col" style={{ maxHeight: '82vh', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="w-full max-w-md card flex flex-col" style={{ maxHeight: '82dvh', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
               <div>
                 <p style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
@@ -580,6 +628,19 @@ export default function PlannerPage() {
               <div className="flex-1 min-w-0">
                 <p className="font-semibold" style={{ fontSize: 15, color: 'var(--text)' }}>I'm eating out</p>
                 <p style={{ fontSize: 12, color: 'var(--text-3)' }}>No cooking — skips grocery, time &amp; cost</p>
+              </div>
+            </button>
+            <button onClick={handleSurpriseMe}
+              className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
+              style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)' }}>
+                🎲
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold" style={{ fontSize: 15, color: 'var(--text)' }}>Surprise me</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Pick a random {swapTarget.category.toLowerCase()} for me</p>
               </div>
             </button>
             <div className="overflow-y-auto flex-1">
@@ -614,6 +675,98 @@ export default function PlannerPage() {
         </div>
       )}
 
+      {/* ════════ Move meal modal ════════ */}
+      {moveTarget && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+          onClick={e => e.target === e.currentTarget && setMoveTarget(null)}>
+          <div className="w-full max-w-md card flex flex-col" style={{ maxHeight: '82dvh', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+            <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <p style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+                  Moving {weeklyPlan?.[moveTarget.dayIdx]?.[moveTarget.category]?.item_name || 'meal'}
+                </p>
+                <h3 className="font-display font-semibold mt-0.5" style={{ fontSize: 21, color: 'var(--text)', letterSpacing: '-0.03em' }}>
+                  Move to…
+                </h3>
+              </div>
+              <button onClick={() => setMoveTarget(null)} className="btn-ghost btn-icon"><X size={19} /></button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-3">
+              {DAYS.map((day, dIdx) => (
+                <div key={day} style={{ marginBottom: 6 }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)', padding: '6px 8px 4px' }}>{day}</p>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {CATEGORIES.map(cat => {
+                      const occupied = weeklyPlan?.[dIdx]?.[cat]
+                      const isSelf = dIdx === moveTarget.dayIdx && cat === moveTarget.category
+                      return (
+                        <button key={cat} onClick={() => handleMoveTo(dIdx, cat)} disabled={isSelf}
+                          className="flex items-center justify-between rounded-xl tap-target transition-all px-3 py-2.5 text-left"
+                          style={{
+                            border: '1px solid var(--border)',
+                            background: isSelf ? 'var(--surface-2)' : 'var(--surface)',
+                            opacity: isSelf ? 0.5 : 1,
+                          }}
+                          onMouseEnter={e => { if (!isSelf) e.currentTarget.style.borderColor = 'var(--brand)' }}
+                          onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)' }}>
+                          <span style={{ fontSize: 12.5, color: 'var(--text)' }}>{cat}</span>
+                          <span style={{ fontSize: 10.5, color: 'var(--text-3)' }}>{isSelf ? 'current' : occupied ? 'swap' : 'empty'}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-3" style={{ borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 11.5, color: 'var(--text-3)', textAlign: 'center' }}>
+                Moving onto an occupied slot swaps the two meals.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ Regenerate confirmation ════════ */}
+      {showRegenModal && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+          onClick={e => e.target === e.currentTarget && setShowRegenModal(false)}>
+          <div className="w-full max-w-md card" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+            <div className="px-6 pt-6 pb-2">
+              <div className="flex items-center justify-center rounded-2xl mb-4"
+                style={{ width: 48, height: 48, background: 'var(--brand-light)' }}>
+                <Wand2 size={22} style={{ color: 'var(--brand)' }} />
+              </div>
+              <h3 className="font-display font-semibold" style={{ fontSize: 20, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                Replace this week's plan?
+              </h3>
+              <p style={{ fontSize: 13.5, color: 'var(--text-2)', marginTop: 6, lineHeight: 1.55 }}>
+                Your current plan is auto-saved, but generating a new one will replace it for good. Want to save this one to your library first so you can come back to it?
+              </p>
+            </div>
+            <div className="px-6 pt-2 pb-3">
+              <input className="input" placeholder="Name to save this plan (optional)"
+                value={regenSaveName} onChange={e => setRegenSaveName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSaveThenGenerate()} />
+            </div>
+            <div className="px-6 pb-6 flex flex-col gap-2">
+              <button onClick={handleSaveThenGenerate} disabled={saving} className="btn-primary btn w-full gap-2 tap-target">
+                {saving ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Save size={16} />}
+                Save it, then generate new
+              </button>
+              <button onClick={doGenerate} disabled={saving} className="btn-secondary btn w-full gap-2 tap-target">
+                <Wand2 size={15} /> Replace without saving
+              </button>
+              <button onClick={() => setShowRegenModal(false)} disabled={saving} className="btn-ghost btn w-full tap-target">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ════════ Share modal ════════ */}
       {showShareModal && weeklyPlan && (
         <ShareModal
@@ -627,8 +780,30 @@ export default function PlannerPage() {
 
       {/* ════════ Recipe detail ════════ */}
       {viewMeal && (
-        <RecipeDetailModal meal={viewMeal} onClose={() => setViewMeal(null)} />
+        <RecipeDetailModal meal={allMeals.find(m => m.id === viewMeal.id) || viewMeal} onClose={() => setViewMeal(null)}
+          onToggleFavorite={(m) => m.id && toggleFavorite(m.id, m.is_favorite)} />
       )}
+    </div>
+  )
+}
+
+// ── Nutrition goal progress bar ───────────────────────────────────────
+function GoalBar({ label, current, goal, unit }) {
+  const pct = goal > 0 ? Math.min(100, Math.round((current / goal) * 100)) : 0
+  const over = current > goal
+  const color = over ? 'var(--danger)' : pct >= 80 ? 'var(--success)' : 'var(--accent)'
+  return (
+    <div>
+      <div className="flex justify-between" style={{ fontSize: 11, marginBottom: 4 }}>
+        <span style={{ color: 'var(--text-3)' }}>{label}</span>
+        <span className="nums" style={{ color: 'var(--text-2)', fontWeight: 600 }}>
+          {current.toLocaleString()}{unit} / {goal.toLocaleString()}{unit}
+          {over && <span style={{ color: 'var(--danger)' }}> · over</span>}
+        </span>
+      </div>
+      <div style={{ height: 5, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 99, background: color, width: `${pct}%`, transition: 'width 0.4s cubic-bezier(0.22,1,0.36,1)' }} />
+      </div>
     </div>
   )
 }
@@ -650,7 +825,7 @@ function UndoToast({ label, onUndo, onDismiss }) {
 }
 
 // ── Empty state: no plan at all ───────────────────────────────────────
-function EmptyPlan({ generating, onGenerate, mealCount }) {
+function EmptyPlan({ generating, onGenerate, mealCount, hasSavedPlans, onLoadSaved }) {
   return (
     <div className="flex flex-col items-center justify-center text-center" style={{ minHeight: 380, gap: 14, maxWidth: 360, margin: '0 auto' }}>
       <div className="flex items-center justify-center rounded-2xl" style={{ width: 64, height: 64, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
@@ -668,6 +843,11 @@ function EmptyPlan({ generating, onGenerate, mealCount }) {
           ? <><Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> Building…</>
           : <><Wand2 size={16} /> Generate week</>}
       </button>
+      {hasSavedPlans && (
+        <button onClick={onLoadSaved} className="btn-ghost btn gap-2" style={{ fontSize: 13.5 }}>
+          <Bookmark size={15} /> Or load a saved plan
+        </button>
+      )}
       {mealCount === 0 && (
         <p style={{ fontSize: 12.5, color: 'var(--text-3)' }}>Add some recipes first to get started.</p>
       )}
@@ -729,10 +909,10 @@ function ShareModal({ weeklyPlan, username, servings = 1, onClose, initialTab })
   const activeText = tab === 'plan' ? planText : groceryText
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4"
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-lg card" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+      <div className="w-full max-w-lg card" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)', maxHeight: '85dvh', display: 'flex', flexDirection: 'column' }}>
         <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
           <div>
             <h3 className="font-display font-semibold" style={{ fontSize: 21, color: 'var(--text)', letterSpacing: '-0.03em' }}>Share</h3>

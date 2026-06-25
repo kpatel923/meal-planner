@@ -2,17 +2,18 @@ import { useState } from 'react'
 import { DIET_LABELS, isEatingOut } from '../../lib/mealLogic'
 import { nutritionColor } from '../../lib/nutrition'
 import { getMealFacts, formatPrepTime } from '../../lib/mealFacts'
+import { tapHaptic } from '../../lib/haptics'
 import {
-  Check, ArrowLeftRight, ChevronRight, Flame, Plus, Leaf, Clock, DollarSign,
+  Check, ArrowLeftRight, ChevronRight, Flame, Plus, Leaf, Clock, DollarSign, MoveRight,
 } from 'lucide-react'
 
 // Per-category visual identity. Uses the app's existing token palette so it
 // stays on-brand in both light and dark themes.
 const CAT_STYLES = {
-  Breakfast: { accent: '#D9892E', tint: 'rgba(217,137,46,0.12)',  icon: '🍳' },
-  Lunch:     { accent: 'var(--success)', tint: 'var(--success-light)', icon: '🥗' },
+  Breakfast: { accent: '#D9A12E', tint: 'rgba(217,161,46,0.14)',  icon: '🍳' },
+  Lunch:     { accent: 'var(--accent)', tint: 'var(--accent-light)', icon: '🥗' },
   Dinner:    { accent: 'var(--brand)', tint: 'var(--brand-light)',  icon: '🍝' },
-  Snack:     { accent: '#8B5FBF', tint: 'rgba(139,95,191,0.12)',   icon: '🍎' },
+  Snack:     { accent: '#7A8C5A', tint: 'rgba(122,140,90,0.14)',   icon: '🍎' },
 }
 
 /**
@@ -20,7 +21,7 @@ const CAT_STYLES = {
  * Falls back to an "add" affordance when `meal` is null.
  */
 export default function MealCard({
-  meal, category, prepped, onTogglePrep, onSwap, onView, onAdd, animDelay = 0,
+  meal, category, prepped, onTogglePrep, onSwap, onView, onAdd, onMove, animDelay = 0,
 }) {
   const style = CAT_STYLES[category] || CAT_STYLES.Breakfast
   const [justChecked, setJustChecked] = useState(false)
@@ -54,6 +55,7 @@ export default function MealCard({
     e.stopPropagation()
     if (!prepped) { setJustChecked(true); setTimeout(() => setJustChecked(false), 360) }
     onTogglePrep?.()
+    tapHaptic()
   }
 
   return (
@@ -155,6 +157,18 @@ export default function MealCard({
         >
           <ArrowLeftRight size={15} />
         </button>
+        {onMove && (
+          <button
+            onClick={e => { e.stopPropagation(); onMove(category) }}
+            title="Move meal" aria-label="Move meal to another day"
+            className="flex items-center justify-center rounded-lg transition-all tap-target"
+            style={{ width: 32, height: 32, color: 'var(--text-3)', background: 'transparent' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-3)' }}
+          >
+            <MoveRight size={15} />
+          </button>
+        )}
         <button
           onClick={e => { e.stopPropagation(); onView?.(meal) }}
           title="View recipe" aria-label="View recipe"

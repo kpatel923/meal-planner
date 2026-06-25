@@ -2,10 +2,12 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlans } from '../hooks/usePlans'
 import { usePlanStore } from '../hooks/usePlanStore'
+import { useAuth } from '../hooks/useAuth'
 import { buildGroceryList } from '../lib/mealLogic'
 import { groupGroceryByCategory, GROCERY_CATEGORY_ORDER, estimateQuantity } from '../lib/groceryCategories'
 import { buildGroceryShareText, shareText } from '../lib/sharing'
 import { saveForOffline, loadOfflineData, saveOfflineChecked, isOnline } from '../lib/offline'
+import { tapHaptic } from '../lib/haptics'
 import PageHeader from '../components/planner/PageHeader'
 import {
   ShoppingCart, CheckCircle2, Square,
@@ -36,7 +38,12 @@ const CAT_COLORS = {
 export default function GroceryPage() {
   const navigate  = useNavigate()
   const { plans, loadPlan: loadSavedPlan } = usePlans()
+  const { profile } = useAuth()
   const { weeklyPlan, servings, loadPlan: storeLoadPlan } = usePlanStore()
+  const pantrySet = useMemo(
+    () => new Set((profile?.pantry_items || []).map(s => s.toLowerCase())),
+    [profile?.pantry_items],
+  )
 
   const [checked,         setChecked]         = useState({})
   const [showMeals,       setShowMeals]       = useState(false)
@@ -68,14 +75,16 @@ export default function GroceryPage() {
   const groceryMap = useMemo(() => {
     const map = {}
     for (const [ing, meals] of Object.entries(baseGroceryMap)) {
-      if (!removedItems[ing]) map[ing] = meals
+      if (removedItems[ing]) continue
+      if (pantrySet.has(ing.toLowerCase())) continue  // already have it at home
+      map[ing] = meals
     }
     for (const item of extraItems) {
       const key = item.name.toLowerCase()
       if (!removedItems[key]) map[key] = ['Added by you']
     }
     return map
-  }, [baseGroceryMap, extraItems, removedItems])
+  }, [baseGroceryMap, extraItems, removedItems, pantrySet])
 
   const grouped      = useMemo(() => groupGroceryByCategory(groceryMap), [groceryMap])
   const allIngreds   = useMemo(() => Object.keys(groceryMap), [groceryMap])
@@ -131,7 +140,7 @@ export default function GroceryPage() {
     }
   }, [weeklyPlan, offlineLoaded])
 
-  function toggle(ing)     { setChecked(p => ({ ...p, [ing]: !p[ing] })) }
+  function toggle(ing)     { tapHaptic(); setChecked(p => ({ ...p, [ing]: !p[ing] })) }
   function selectAll()     { setChecked(Object.fromEntries(allIngreds.map(i => [i, true]))) }
   function clearAll()      { setChecked({}) }
   function toggleCat(cat)  { setCollapsedCats(p => ({ ...p, [cat]: !p[cat] })) }

@@ -61,12 +61,17 @@ function scoreAndSampleMeals(meals, total = 7, budgetMode = false) {
     }
   }
 
-  // Score each meal by ingredient overlap (reuse = less waste, cheaper shop)
-  const scored = meals.map(meal => ({
-    ...meal,
-    _ingredients: parseIngredients(meal.ingredients),
-    _score: parseIngredients(meal.ingredients).reduce((sum, ing) => sum + (counter[ing] || 0), 0),
-  }))
+  // Score each meal by ingredient overlap (reuse = less waste, cheaper shop).
+  // Favorited meals get a meaningful boost so the things you love show up more.
+  const scored = meals.map(meal => {
+    const overlap = parseIngredients(meal.ingredients).reduce((sum, ing) => sum + (counter[ing] || 0), 0)
+    const favBoost = meal.is_favorite ? 8 : 0
+    return {
+      ...meal,
+      _ingredients: parseIngredients(meal.ingredients),
+      _score: overlap + favBoost,
+    }
+  })
 
   if (budgetMode) {
     // Bias toward cheaper meals: lower cost-per-serving sorts first, with the

@@ -40,8 +40,10 @@ export function PlanProvider({ children }) {
   const [planDesc,      setPlanDesc]      = useState(null) // AI description
   const [avoidRepeats,  setAvoidRepeats]  = useState(true) // toggle for the feature
   const [prevPlanSnapshot, setPrevPlanSnapshot] = useState(null) // for undo-generate
+  const [dayUndo,          setDayUndo]          = useState(null)  // for undo regen-day { dayIdx, meals }
   const undoTimerRef      = useRef(null)
   const undoGenTimerRef   = useRef(null)
+  const dayUndoTimerRef   = useRef(null)
 
   const setServings = useCallback((n) => {
     const clamped = Math.min(20, Math.max(1, n))
@@ -128,11 +130,34 @@ export function PlanProvider({ children }) {
       try {
         const tempPlan = buildWeeklyPlan(meals, { budgetMode })
         const newDayMeals = tempPlan[0]
+        // Snapshot the day's previous meals so it can be undone.
+        setDayUndo({ dayIdx, meals: prev[dayIdx] || {} })
+        if (dayUndoTimerRef.current) clearTimeout(dayUndoTimerRef.current)
+        dayUndoTimerRef.current = setTimeout(() => setDayUndo(null), 10000)
         const next = { ...prev, [dayIdx]: newDayMeals }
         persistPlan(next)
         return next
       } catch { return prev }
     })
+  }, [])
+
+  const undoRegenerateDay = useCallback(() => {
+    setDayUndo(prevUndo => {
+      if (!prevUndo) return null
+      if (dayUndoTimerRef.current) clearTimeout(dayUndoTimerRef.current)
+      setWeeklyPlan(prev => {
+        if (!prev) return prev
+        const next = { ...prev, [prevUndo.dayIdx]: prevUndo.meals }
+        persistPlan(next)
+        return next
+      })
+      return null
+    })
+  }, [])
+
+  const clearDayUndo = useCallback(() => {
+    if (dayUndoTimerRef.current) clearTimeout(dayUndoTimerRef.current)
+    setDayUndo(null)
   }, [])
 
   const swapMeal = useCallback((dayIdx, category, newMeal) => {
@@ -233,9 +258,9 @@ export function PlanProvider({ children }) {
   return (
     <PlanContext.Provider value={{
       weeklyPlan, generating, dietTypes, expandedDay, servings,
-      prepChecked, undoStack, planDesc, avoidRepeats, prevPlanSnapshot,
+      prepChecked, undoStack, planDesc, avoidRepeats, prevPlanSnapshot, dayUndo,
       setDietTypes, setExpandedDay, setPlanDesc, setServings, setAvoidRepeats,
-      generate, regenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
+      generate, regenerateDay, undoRegenerateDay, clearDayUndo, swapMeal, reorderMeal, undoSwap, clearUndo,
       undoGenerate, clearUndoGenerate,
       loadPlan, clearPlan, togglePrep, isPrepDone, prepProgress,
     }}>

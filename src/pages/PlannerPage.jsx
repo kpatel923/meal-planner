@@ -50,7 +50,7 @@ export default function PlannerPage() {
     weeklyPlan, generating, dietTypes, servings, avoidRepeats,
     undoStack, prevPlanSnapshot, planDesc,
     setDietTypes, setServings, setAvoidRepeats, setPlanDesc,
-    generate, regenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
+    generate, regenerateDay, undoRegenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
     undoGenerate, clearUndoGenerate,
     clearPlan, togglePrep, isPrepDone, prepProgress,
   } = usePlanStore()
@@ -129,7 +129,19 @@ export default function PlannerPage() {
     await new Promise(r => setTimeout(r, 350))
     regenerateDay(dayIdx, filteredMeals, profile?.budget_mode || false)
     setRegenDay(null)
-    toast.success(`${DAYS[dayIdx]} refreshed!`)
+    toast.success(
+      (t) => (
+        <span className="flex items-center gap-3">
+          {DAYS[dayIdx]} refreshed
+          <button
+            onClick={() => { undoRegenerateDay(); toast.dismiss(t.id) }}
+            style={{ fontWeight: 700, color: 'var(--brand-text)', textDecoration: 'underline' }}>
+            Undo
+          </button>
+        </span>
+      ),
+      { duration: 6000 }
+    )
   }
 
   async function fetchAIDescription(plan, isManualRetry = false) {
@@ -216,14 +228,40 @@ export default function PlannerPage() {
 
   // Per-day nutrition for the active-day banner. MUST stay above any early
   // return so the hook order is identical on every render.
+  // Overlay the latest meal data (nutrition, cost, prep_time, photo) onto the
+  // saved plan by matching ids. This makes plans generated BEFORE a data change
+  // (e.g. the enrichment import) show current values without regenerating.
+  const mergedPlan = useMemo(() => {
+    if (!weeklyPlan) return null
+    if (!allMeals?.length) return weeklyPlan
+    const byId = new Map(allMeals.map(m => [m.id, m]))
+    const out = {}
+    for (const [day, meals] of Object.entries(weeklyPlan)) {
+      out[day] = {}
+      for (const [cat, meal] of Object.entries(meals)) {
+        if (!meal) { out[day][cat] = meal; continue }
+        const live = byId.get(meal.id)
+        // Keep the saved meal but fill in fields from the live record so older
+        // snapshots gain prep_time/calories/cost/photo. Saved values win if set.
+        out[day][cat] = live ? { ...live, ...meal,
+          prep_time:        meal.prep_time        ?? live.prep_time,
+          calories:         meal.calories         ?? live.calories,
+          cost_per_serving: meal.cost_per_serving ?? live.cost_per_serving,
+          photo_url:        meal.photo_url        ?? live.photo_url,
+        } : meal
+      }
+    }
+    return out
+  }, [weeklyPlan, allMeals])
+
   const activeDayNutrition = useMemo(() => {
-    if (!weeklyPlan?.[activeDay]) return null
-    return weeklyNutritionTotals({ 0: weeklyPlan[activeDay] }, servings).perDay
-  }, [weeklyPlan, activeDay, servings])
+    if (!mergedPlan?.[activeDay]) return null
+    return weeklyNutritionTotals({ 0: mergedPlan[activeDay] }, servings).perDay
+  }, [mergedPlan, activeDay, servings])
 
   // Active-day time + cost totals for the day-header highlight line.
   const activeDayFacts = useMemo(() => {
-    const day = weeklyPlan?.[activeDay]
+    const day = mergedPlan?.[activeDay]
     if (!day) return { minutes: 0, hasTime: false, cost: 0 }
     let minutes = 0, hasTime = false, cost = 0
     CATEGORIES.forEach(cat => {
@@ -234,7 +272,7 @@ export default function PlannerPage() {
       if (f.cost != null) cost += f.cost * servings
     })
     return { minutes, hasTime, cost }
-  }, [weeklyPlan, activeDay, servings])
+  }, [mergedPlan, activeDay, servings])
 
   // ── Loading skeleton ──────────────────────────────────────────────
   if (mealsLoading) {
@@ -247,7 +285,7 @@ export default function PlannerPage() {
     )
   }
 
-  const dayMeals = weeklyPlan?.[activeDay] || {}
+  const dayMeals = mergedPlan?.[activeDay] || {}
   const dayPlanned = CATEGORIES.filter(c => dayMeals[c])
   const isToday = activeDay === todayIdx
 
@@ -499,7 +537,7 @@ export default function PlannerPage() {
         <aside className="hidden lg:flex flex-col shrink-0 sticky top-0 h-screen overflow-y-auto"
           style={{ width: 264, borderLeft: '1px solid var(--border)', background: 'var(--surface)' }}>
           <PanelSection title="Week overview">
-            <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={weeklyPlan} servings={servings} />
+            <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
           </PanelSection>
           <PanelSection title="Grocery list" link="Open full" onLink={() => navigate('/grocery')}>
             <GroceryPreview weeklyPlan={weeklyPlan} onOpenFull={() => navigate('/grocery')} />
@@ -560,7 +598,7 @@ export default function PlannerPage() {
 
       {/* ── Mobile sheets ── */}
       <MobileSheet open={mobileSheet === 'overview'} onClose={() => setMobileSheet(null)} title="Week overview">
-        <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={weeklyPlan} servings={servings} />
+        <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
       </MobileSheet>
       <MobileSheet open={mobileSheet === 'grocery'} onClose={() => setMobileSheet(null)} title="Grocery list">
         <GroceryPreview weeklyPlan={weeklyPlan} onOpenFull={() => { setMobileSheet(null); navigate('/grocery') }} />

@@ -27,7 +27,7 @@ import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
   CalendarPlus, RefreshCw, BarChart3,
-  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame,
+  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame, Trash2,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -70,6 +70,7 @@ export default function PlannerPage() {
   const [tuneProtein,    setTuneProtein]    = useState(profile?.daily_protein ? String(profile.daily_protein) : '')
   const [tuning,         setTuning]         = useState(false)
   const [tuneResult,     setTuneResult]     = useState(null)
+  const [tuneConfirmClear, setTuneConfirmClear] = useState(false)
   const [swapTarget,     setSwapTarget]     = useState(null)
   const [moveTarget,     setMoveTarget]     = useState(null)
   const [swapSearch,     setSwapSearch]     = useState('')
@@ -78,7 +79,6 @@ export default function PlannerPage() {
   const [loadingDesc,    setLoadingDesc]    = useState(false)
   const [regenDay,       setRegenDay]       = useState(null)
   const [viewMeal,       setViewMeal]       = useState(null)
-  const [showControls,   setShowControls]   = useState(false)
   const [mobileSheet,    setMobileSheet]    = useState(null) // 'overview' | 'grocery' | 'ai' | 'actions' | null
 
   // Single meals fetch — filter client-side instead of a second query.
@@ -338,14 +338,11 @@ export default function PlannerPage() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowControls(v => !v)}
-                className="flex items-center gap-1.5 rounded-xl tap-target px-3"
-                style={{ height: 36, border: '1px solid var(--border-2)', background: showControls ? 'var(--surface-2)' : 'transparent', color: 'var(--text-2)', fontSize: 12.5 }}
-                title="Filters & options">
-                <RefreshCw size={14} />
-                <span className="hidden sm:inline">{dietTypes.map(d => DIET_FILTERS.find(f => f.key === d)?.label).filter(Boolean).join(' · ') || 'Filters'}</span>
-              </button>
+              {!weeklyPlan && (
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }} className="hidden sm:block">
+                  Generate, then tap Tune to refine.
+                </p>
+              )}
 
               {weeklyPlan && (
                 <button onClick={() => handleShare('plan')}
@@ -372,58 +369,7 @@ export default function PlannerPage() {
             </div>
           </div>
 
-          {/* Collapsible controls */}
-          {showControls && (
-            <div className="rounded-2xl mt-3 p-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', animation: 'slideDown 0.22s ease both' }}>
-              <div className="flex flex-col sm:flex-row gap-5 sm:items-end flex-wrap">
-                <div>
-                  <p className="input-label mb-2">Diet filter</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {DIET_FILTERS.map(({ key, label, color }) => {
-                      const active = dietTypes.includes(key)
-                      return (
-                        <button key={key} onClick={() => toggleDiet(key)}
-                          className="px-3.5 py-2 rounded-full font-semibold transition-all active:scale-95 tap-target"
-                          style={{ fontSize: 12.5, border: `2px solid ${active ? color : 'var(--border)'}`, background: active ? `${color}18` : 'transparent', color: active ? color : 'var(--text-3)' }}>
-                          {label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <p className="input-label mb-2 flex items-center gap-1.5"><Users size={11} /> Cooking for</p>
-                  <div className="stepper">
-                    <button onClick={() => setServings(servings - 1)} disabled={servings <= 1} className="stepper-btn" style={{ opacity: servings <= 1 ? 0.3 : 1 }}>−</button>
-                    <span className="stepper-value">{servings}</span>
-                    <button onClick={() => setServings(servings + 1)} disabled={servings >= 20} className="stepper-btn" style={{ opacity: servings >= 20 ? 0.3 : 1 }}>+</button>
-                  </div>
-                </div>
-                <div>
-                  <p className="input-label mb-2 flex items-center gap-1.5"><RefreshCw size={11} /> Avoid repeats</p>
-                  <button onClick={() => setAvoidRepeats(v => !v)}
-                    role="switch" aria-checked={avoidRepeats} aria-label="Avoid repeats"
-                    className="relative rounded-full transition-all duration-300 shrink-0"
-                    style={{ width: 52, height: 30, background: avoidRepeats ? 'var(--brand)' : 'var(--border-2)', border: 'none', cursor: 'pointer', padding: 0 }}>
-                    <span className="absolute rounded-full bg-white shadow-md transition-transform duration-300"
-                      style={{ width: 24, height: 24, top: 3, left: 3, transform: avoidRepeats ? 'translateX(22px)' : 'translateX(0)' }} />
-                  </button>
-                </div>
-              </div>
-
-              {weeklyPlan && (
-                <div className="flex gap-2.5 mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-                  <input className="input flex-1" placeholder="Name this plan to save…"
-                    value={planName} onChange={e => setPlanName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSave()} />
-                  <button onClick={handleSave} disabled={saving || !planName.trim()} className="btn-primary btn gap-1.5">
-                    {saving ? <Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> : <Save size={15} />} Save
-                  </button>
-                  <button onClick={clearPlan} className="btn-ghost btn btn-icon" title="Clear plan"><X size={16} /></button>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Pre-generation options (diet/servings/repeats live in Tune after a plan exists) */}
         </div>
 
         {/* ── Day strip ── */}
@@ -484,7 +430,7 @@ export default function PlannerPage() {
 
               {/* Per-day nutrition + time + cost highlights */}
               {dayPlanned.length > 0 && activeDayNutrition && (
-                <div className="flex items-stretch rounded-2xl mb-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '10px 4px' }}>
+                <div className="flex items-stretch rounded-2xl mb-4" style={{ background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '12px 4px' }}>
                   {[
                     { val: activeDayNutrition.calories?.toLocaleString() ?? '—', label: 'Calories', color: nutritionColor(activeDayNutrition.calories) },
                     { val: activeDayFacts.hasTime ? formatPrepTime(activeDayFacts.minutes) : '—', label: 'Time', color: 'var(--text)' },
@@ -529,9 +475,7 @@ export default function PlannerPage() {
                       category={cat}
                       prepped={isPrepDone(activeDay, cat)}
                       onTogglePrep={() => togglePrep(activeDay, cat)}
-                      onSwap={() => openSwap(activeDay, cat)}
-                      onMove={() => openMove(activeDay, cat)}
-                      onView={(m) => setViewMeal(m)}
+                      onView={(m) => setViewMeal({ meal: m, dayIdx: activeDay, category: cat })}
                       onAdd={() => openSwap(activeDay, cat)}
                       animDelay={i * 45}
                     />
@@ -853,6 +797,63 @@ export default function PlannerPage() {
               </div>
             )}
 
+            {/* Plan settings — diet, servings, avoid-repeats */}
+            <div className="px-6 mb-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 12 }}>Plan settings</p>
+
+              <p className="input-label mb-2">Diet filter</p>
+              <div className="flex gap-2 flex-wrap mb-4">
+                {DIET_FILTERS.map(({ key, label, color }) => {
+                  const active = dietTypes.includes(key)
+                  return (
+                    <button key={key} onClick={() => toggleDiet(key)}
+                      className="px-3.5 py-2 rounded-full font-semibold transition-all active:scale-95 tap-target"
+                      style={{ fontSize: 12.5, border: `2px solid ${active ? color : 'var(--border)'}`, background: active ? `${color}18` : 'transparent', color: active ? color : 'var(--text-3)' }}>
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center justify-between mb-3">
+                <p className="input-label mb-0 flex items-center gap-1.5"><Users size={11} /> Cooking for</p>
+                <div className="stepper">
+                  <button onClick={() => setServings(servings - 1)} disabled={servings <= 1} className="stepper-btn" style={{ opacity: servings <= 1 ? 0.3 : 1 }}>−</button>
+                  <span className="stepper-value">{servings}</span>
+                  <button onClick={() => setServings(servings + 1)} disabled={servings >= 20} className="stepper-btn" style={{ opacity: servings >= 20 ? 0.3 : 1 }}>+</button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <p className="input-label mb-0 flex items-center gap-1.5"><RefreshCw size={11} /> Avoid repeats</p>
+                <button onClick={() => setAvoidRepeats(v => !v)}
+                  role="switch" aria-checked={avoidRepeats} aria-label="Avoid repeats"
+                  className="relative rounded-full transition-all duration-300 shrink-0"
+                  style={{ width: 52, height: 30, background: avoidRepeats ? 'var(--brand)' : 'var(--border-2)', border: 'none', cursor: 'pointer', padding: 0 }}>
+                  <span className="absolute rounded-full bg-white shadow-md transition-transform duration-300"
+                    style={{ width: 24, height: 24, top: 3, left: 3, transform: avoidRepeats ? 'translateX(22px)' : 'translateX(0)' }} />
+                </button>
+              </div>
+            </div>
+
+            {/* Save / clear this plan */}
+            <div className="px-6 mb-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 10 }}>Save this plan</p>
+              <div className="flex gap-2 mb-2">
+                <input className="input flex-1" placeholder="Name this plan…"
+                  value={planName} onChange={e => setPlanName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSave()} />
+                <button onClick={handleSave} disabled={saving || !planName.trim()} className="btn-primary btn gap-1.5 shrink-0">
+                  {saving ? <Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> : <Save size={15} />} Save
+                </button>
+              </div>
+              <button onClick={() => { if (tuneConfirmClear) { clearPlan(); setShowTune(false); setTuneConfirmClear(false); toast.success('Plan cleared') } else { setTuneConfirmClear(true) } }}
+                className="btn-ghost btn w-full tap-target gap-2"
+                style={{ color: tuneConfirmClear ? 'var(--danger)' : 'var(--text-3)' }}>
+                <Trash2 size={14} /> {tuneConfirmClear ? 'Tap again to clear the whole plan' : 'Clear plan'}
+              </button>
+            </div>
+
             <div className="px-6 pb-6 flex flex-col gap-2">
               <button onClick={handleApplyTune} disabled={tuning} className="btn-primary btn w-full tap-target gap-2">
                 {tuning ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <SlidersHorizontal size={15} />}
@@ -863,7 +864,7 @@ export default function PlannerPage() {
                   <Undo2 size={15} /> Undo tune
                 </button>
               )}
-              <button onClick={() => setShowTune(false)} className="btn-ghost btn w-full tap-target">Done</button>
+              <button onClick={() => { setShowTune(false); setTuneConfirmClear(false) }} className="btn-ghost btn w-full tap-target">Done</button>
             </div>
           </div>
         </div>
@@ -921,8 +922,13 @@ export default function PlannerPage() {
 
       {/* ════════ Recipe detail ════════ */}
       {viewMeal && (
-        <RecipeDetailModal meal={allMeals.find(m => m.id === viewMeal.id) || viewMeal} onClose={() => setViewMeal(null)}
-          onToggleFavorite={(m) => m.id && toggleFavorite(m.id, m.is_favorite)} />
+        <RecipeDetailModal
+          meal={allMeals.find(m => m.id === viewMeal.meal?.id) || viewMeal.meal}
+          onClose={() => setViewMeal(null)}
+          onToggleFavorite={(m) => m.id && toggleFavorite(m.id, m.is_favorite)}
+          onSwap={() => { openSwap(viewMeal.dayIdx, viewMeal.category); setViewMeal(null) }}
+          onMove={() => { openMove(viewMeal.dayIdx, viewMeal.category); setViewMeal(null) }}
+        />
       )}
     </div>
   )

@@ -4,7 +4,7 @@ import { DIET_LABELS } from '../lib/mealLogic'
 import { estimateNutrition } from '../lib/nutrition'
 import { estimateCost, getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
 import { formatPrepTime } from '../lib/mealFacts'
-import { Sparkles, X, Edit2, Trash2, Play, Camera, FileText, Flame, Loader2, Clock, Heart } from 'lucide-react'
+import { Sparkles, X, Edit2, Trash2, Play, Camera, FileText, Flame, Loader2, Clock, Heart, ArrowLeftRight, MoveRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 export const DIET_COLORS = {
@@ -35,7 +35,7 @@ export function getVideoMeta(url) {
  * onEdit / onDelete are optional — pass nothing to hide those actions
  * (e.g. when viewing a meal from a read-only context).
  */
-export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onToggleFavorite }) {
+export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onToggleFavorite, onSwap, onMove }) {
   const [sharing, setSharing] = useState(false)
   if (!meal) return null
 
@@ -200,6 +200,27 @@ export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onT
             </div>
           )}
         </div>
+
+        {/* Planner actions — only when opened from the planner */}
+        {(onSwap || onMove) && (
+          <div className="px-6 sm:px-8 pb-3">
+            <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 8 }}>
+              In your plan
+            </p>
+            <div className="flex gap-2">
+              {onSwap && (
+                <button onClick={() => onSwap(meal)} className="btn-secondary btn flex-1 tap-target gap-1.5">
+                  <ArrowLeftRight size={15} /> Swap
+                </button>
+              )}
+              {onMove && (
+                <button onClick={() => onMove(meal)} className="btn-secondary btn flex-1 tap-target gap-1.5">
+                  <MoveRight size={15} /> Move day
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <div className="flex gap-3 p-6 sm:p-8 pt-0">

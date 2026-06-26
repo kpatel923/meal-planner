@@ -41,24 +41,27 @@ export default function DayStrip({ weeklyPlan, activeDay, onSelect, isPrepDone, 
             aria-selected={isActive}
             aria-label={`${day}${isToday ? ', today' : ''}, ${planned.length} meals planned`}
             onClick={() => onSelect(i)}
-            className="day-tab-snap shrink-0 flex flex-col items-center rounded-2xl transition-all tap-target"
+            className="day-tab-snap shrink-0 flex flex-col items-center transition-all tap-target"
             style={{
-              minWidth: 56, padding: '8px 10px 6px',
-              background: isActive ? 'var(--surface-3)' : 'transparent',
-              border: `1px solid ${isActive ? 'var(--border-2)' : 'transparent'}`,
+              minWidth: 54, padding: '8px 10px 7px',
+              borderRadius: 14,
+              background: isActive ? 'var(--brand)' : 'var(--surface)',
+              border: `1px solid ${isActive ? 'var(--brand)' : 'var(--border)'}`,
+              boxShadow: isActive ? 'var(--shadow-brand)' : 'var(--shadow-xs)',
+              transform: isActive ? 'translateY(-1px)' : 'none',
             }}
-            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--surface-2)' }}
-            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+            onMouseEnter={e => { if (!isActive) e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.boxShadow = 'var(--shadow-xs)' }}
           >
             <span style={{
               fontSize: 9.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: isActive ? 'var(--text-2)' : 'var(--text-3)',
+              color: isActive ? 'rgba(255,255,255,0.65)' : 'var(--text-3)',
             }}>
               {SHORT[i]}
             </span>
             <span className="nums" style={{
-              fontSize: 19, fontWeight: 600, lineHeight: 1.15, marginTop: 1,
-              color: isToday ? 'var(--brand)' : (isActive ? 'var(--text)' : 'var(--text-2)'),
+              fontSize: 19, fontWeight: 700, lineHeight: 1.15, marginTop: 1,
+              color: isActive ? '#fff' : (isToday ? 'var(--accent-text)' : 'var(--text)'),
             }}>
               {dateNum}
             </span>
@@ -66,12 +69,14 @@ export default function DayStrip({ weeklyPlan, activeDay, onSelect, isPrepDone, 
               {planned.length > 0 ? planned.map(c => (
                 <span key={c} style={{
                   width: 4, height: 4, borderRadius: '50%',
-                  background: isPrepDone(i, c) ? 'var(--success)' : '#D9892E',
+                  background: isActive
+                    ? (isPrepDone(i, c) ? 'var(--accent)' : 'rgba(255,255,255,0.6)')
+                    : (isPrepDone(i, c) ? 'var(--success)' : '#D9A12E'),
                   animation: 'pipFill 0.3s ease both',
                 }} />
               )) : (
                 [0, 1, 2, 3].map(d => (
-                  <span key={d} style={{ width: 4, height: 4, borderRadius: '50%', background: 'var(--border-2)' }} />
+                  <span key={d} style={{ width: 4, height: 4, borderRadius: '50%', background: isActive ? 'rgba(255,255,255,0.25)' : 'var(--border-2)' }} />
                 ))
               )}
             </div>

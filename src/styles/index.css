@@ -36,8 +36,17 @@
     --danger-light:   #FDEDEB;
 
     --radius:  16px;
-    --radius-sm: 10px;
+    --radius-sm: 12px;
     --radius-lg: 22px;
+    --radius-pill: 999px;
+
+    /* Layered soft-shadow system — subtle depth, bold direction. */
+    --shadow-xs: 0 1px 2px rgba(22,23,15,0.05);
+    --shadow-sm: 0 2px 8px rgba(22,23,15,0.06), 0 1px 2px rgba(22,23,15,0.04);
+    --shadow-md: 0 4px 16px rgba(22,23,15,0.08), 0 1px 3px rgba(22,23,15,0.05);
+    --shadow-lg: 0 8px 32px rgba(22,23,15,0.10), 0 2px 8px rgba(22,23,15,0.06);
+    --shadow-xl: 0 16px 48px rgba(22,23,15,0.14), 0 4px 12px rgba(22,23,15,0.08);
+    --shadow-brand: 0 4px 16px rgba(26,28,22,0.22);
   }
   .dark {
     --bg:         #101210;
@@ -65,6 +74,13 @@
     --success-light: rgba(26,143,92,0.16);
     --danger:         #F0594A;
     --danger-light:   rgba(212,61,43,0.16);
+
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-sm: 0 2px 8px rgba(0,0,0,0.35), 0 1px 2px rgba(0,0,0,0.3);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.35);
+    --shadow-xl: 0 16px 48px rgba(0,0,0,0.6), 0 4px 12px rgba(0,0,0,0.4);
+    --shadow-brand: 0 4px 16px rgba(0,0,0,0.45);
   }
 
   *, *::before, *::after { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
@@ -172,6 +188,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
+    box-shadow: var(--shadow-sm);
     position: relative;
   }
 
@@ -238,7 +255,7 @@
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 24px;
-    box-shadow: 0 24px 60px rgba(22,22,20,0.18);
+    box-shadow: var(--shadow-xl);
     max-width: 600px; width: 100%;
     max-height: 85vh;            /* fallback for old browsers */
     max-height: 85dvh;           /* dynamic viewport — accounts for mobile toolbars */
@@ -308,7 +325,7 @@
   .segmented-option.active {
     background: var(--surface);
     color: var(--brand);
-    box-shadow: 0 1px 4px rgba(22,22,20,0.10);
+    box-shadow: var(--shadow-sm);
   }
 
   /* ── GRID ────────────────────────────────────────────── */
@@ -438,7 +455,7 @@
   background: var(--surface);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   border-top: 1px solid var(--border);
-  box-shadow: 0 -12px 40px rgba(0,0,0,0.18);
+  box-shadow: var(--shadow-xl);
   animation: sheetUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
   max-height: 82dvh; display: flex; flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);

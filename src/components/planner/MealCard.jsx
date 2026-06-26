@@ -4,7 +4,7 @@ import { nutritionColor } from '../../lib/nutrition'
 import { getMealFacts, formatPrepTime } from '../../lib/mealFacts'
 import { tapHaptic } from '../../lib/haptics'
 import {
-  Check, ArrowLeftRight, ChevronRight, Flame, Plus, Leaf, Clock, DollarSign, MoveRight,
+  Check, ChevronRight, Flame, Plus, Leaf, Clock, DollarSign,
 } from 'lucide-react'
 
 // Per-category visual identity. Uses the app's existing token palette so it
@@ -21,7 +21,7 @@ const CAT_STYLES = {
  * Falls back to an "add" affordance when `meal` is null.
  */
 export default function MealCard({
-  meal, category, prepped, onTogglePrep, onSwap, onView, onAdd, onMove, animDelay = 0,
+  meal, category, prepped, onTogglePrep, onView, onAdd, animDelay = 0,
 }) {
   const style = CAT_STYLES[category] || CAT_STYLES.Breakfast
   const [justChecked, setJustChecked] = useState(false)
@@ -147,28 +147,6 @@ export default function MealCard({
         >
           <Check size={16} strokeWidth={prepped ? 2.6 : 2} />
         </button>
-        <button
-          onClick={e => { e.stopPropagation(); onSwap?.(category) }}
-          title="Swap meal" aria-label="Swap meal"
-          className="flex items-center justify-center rounded-lg transition-all tap-target"
-          style={{ width: 32, height: 32, color: 'var(--text-3)', background: 'transparent' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-3)' }}
-        >
-          <ArrowLeftRight size={15} />
-        </button>
-        {onMove && (
-          <button
-            onClick={e => { e.stopPropagation(); onMove(category) }}
-            title="Move meal" aria-label="Move meal to another day"
-            className="flex items-center justify-center rounded-lg transition-all tap-target"
-            style={{ width: 32, height: 32, color: 'var(--text-3)', background: 'transparent' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-3)' }}
-          >
-            <MoveRight size={15} />
-          </button>
-        )}
         <button
           onClick={e => { e.stopPropagation(); onView?.(meal) }}
           title="View recipe" aria-label="View recipe"

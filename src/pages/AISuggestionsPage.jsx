@@ -2,13 +2,14 @@ import { useState, useEffect, useRef } from 'react'
 import { useMeals } from '../hooks/useMeals'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { useAuth } from '../hooks/useAuth'
-import { getMealSuggestions, analyzeMealPhoto } from '../lib/aiFeatures'
+import { getMealSuggestions, analyzeMealPhoto, detectFridgeIngredients } from '../lib/aiFeatures'
+import { matchMealsToIngredients } from '../lib/fridgeMatch'
 import { fileToCompressedDataURL } from '../lib/imageUtils'
 import PageHeader from '../components/planner/PageHeader'
 import {
   Sparkles, Loader2, Plus, RefreshCw,
   X, Edit2, Check, BookOpen, Globe, Layers,
-  Play, FileText, Users, Mic, Camera, Search, Clock, Flame, Image as ImageIcon,
+  Play, FileText, Users, Mic, Camera, Search, Clock, Flame, Image as ImageIcon, Refrigerator,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -186,8 +187,15 @@ export default function AISuggestionsPage() {
   const [listening,    setListening]    = useState(false)
   const [analyzing,    setAnalyzing]    = useState(false)
   const [photoMenuOpen, setPhotoMenuOpen] = useState(false)
+  const [detectingFridge, setDetectingFridge] = useState(false)
+  const [fridgeMenuOpen,  setFridgeMenuOpen]  = useState(false)
+  const [fridgeIngredients, setFridgeIngredients] = useState(null) // null = no scan yet; [] = scanned
+  const [fridgeInput, setFridgeInput] = useState('')
+  const [fridgeMatches, setFridgeMatches] = useState(null) // library matches [{meal,have,missing,ratio}]
   const cameraInputRef  = useRef(null)
   const libraryInputRef = useRef(null)
+  const fridgeCameraRef  = useRef(null)
+  const fridgeLibraryRef = useRef(null)
   const recognitionRef = useRef(null)
   const voiceSupported = typeof window !== 'undefined' &&
     (window.SpeechRecognition || window.webkitSpeechRecognition)
@@ -270,6 +278,68 @@ export default function AISuggestionsPage() {
       toast.error(err.message || 'Could not analyze that photo', { id: toastId, duration: 5000 })
     }
     setAnalyzing(false)
+  }
+
+  // ── Cook from fridge ──────────────────────────────────────────────
+  async function handleFridgePhoto(e) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setDetectingFridge(true)
+    setFridgeMatches(null)
+    setSuggestions([])
+    const toastId = toast.loading('Scanning your ingredients…')
+    try {
+      const dataUrl = await fileToCompressedDataURL(file)
+      const detected = await detectFridgeIngredients(dataUrl)
+      setFridgeIngredients(detected)
+      toast.success(`Found ${detected.length} ingredient${detected.length === 1 ? '' : 's'} — review below`, { id: toastId })
+    } catch (err) {
+      toast.error(err.message || 'Could not read that photo', { id: toastId, duration: 5000 })
+    }
+    setDetectingFridge(false)
+  }
+
+  function removeFridgeIngredient(item) {
+    setFridgeIngredients(prev => (prev || []).filter(i => i !== item))
+  }
+  function addFridgeIngredient() {
+    const v = fridgeInput.trim().toLowerCase()
+    if (!v) return
+    setFridgeIngredients(prev => prev?.includes(v) ? prev : [...(prev || []), v])
+    setFridgeInput('')
+  }
+  function resetFridge() {
+    setFridgeIngredients(null); setFridgeMatches(null); setFridgeInput(''); setSuggestions([])
+  }
+
+  // Turn the confirmed fridge ingredients into meal suggestions, respecting the
+  // source toggle: library = fuzzy local match; web/both = AI suggestions.
+  async function handleFridgeFindMeals() {
+    const owned = fridgeIngredients || []
+    if (!owned.length) { toast.error('Add at least one ingredient'); return }
+    setLoading(true)
+    setFridgeMatches(null)
+    setSuggestions([])
+    try {
+      if (sourceMode === 'library') {
+        const matches = matchMealsToIngredients(owned, meals, { dietTypes: dietPreferences })
+        if (!matches.length) {
+          toast.error('No close matches in your library — try "Both" or "New ideas" mode')
+        }
+        setFridgeMatches(matches.slice(0, 12))
+      } else {
+        const results = await getMealSuggestions({
+          ingredientsOnHand: owned.join(', '), existingMeals: meals,
+          category, sourceMode, dietPreferences, servings,
+        })
+        if (!results.length) toast.error('No suggestions — try different ingredients')
+        setSuggestions(results)
+      }
+    } catch (e) {
+      toast.error(e.message || 'Could not find meals — try again', { duration: 6000 })
+    }
+    setLoading(false)
   }
 
   const QUICK_PROMPTS = [
@@ -373,6 +443,169 @@ export default function AISuggestionsPage() {
           </>
         )}
       </div>
+
+      {/* Cook from my fridge card */}
+      <input ref={fridgeCameraRef} type="file" accept="image/*" capture="environment"
+        onChange={handleFridgePhoto} style={{ display: 'none' }} />
+      <input ref={fridgeLibraryRef} type="file" accept="image/*"
+        onChange={handleFridgePhoto} style={{ display: 'none' }} />
+      <div style={{ position: 'relative' }}>
+        <button
+          onClick={() => { if (!detectingFridge) setFridgeMenuOpen(v => !v) }}
+          disabled={detectingFridge}
+          className="w-full text-left rounded-2xl mb-4 transition-all tap-target"
+          style={{
+            padding: '16px 18px',
+            background: 'linear-gradient(135deg, var(--accent-light), var(--surface-2))',
+            border: '1px solid var(--accent)',
+            animation: 'slideUp 0.4s ease 0.045s both',
+            opacity: detectingFridge ? 0.7 : 1,
+          }}>
+          <div className="flex items-center gap-3.5">
+            <div className="shrink-0 flex items-center justify-center rounded-2xl"
+              style={{ width: 48, height: 48, background: 'var(--accent)' }}>
+              {detectingFridge
+                ? <Loader2 size={22} className="animate-[spin_1s_linear_infinite]" style={{ color: '#fff' }} />
+                : <Refrigerator size={22} style={{ color: '#fff' }} />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-display font-semibold" style={{ fontSize: 16, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                {detectingFridge ? 'Scanning your ingredients…' : 'Cook from my fridge'}
+              </p>
+              <p style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 1, lineHeight: 1.45 }}>
+                {detectingFridge
+                  ? 'Spotting what you have on hand'
+                  : 'Snap your fridge — AI finds meals from what you have'}
+              </p>
+            </div>
+            {!detectingFridge && (
+              <span className="badge shrink-0" style={{ fontSize: 10, background: 'var(--accent)', color: '#fff', border: 'none' }}>NEW</span>
+            )}
+          </div>
+        </button>
+
+        {fridgeMenuOpen && !detectingFridge && (
+          <>
+            <div onClick={() => setFridgeMenuOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+            <div className="rounded-2xl"
+              style={{
+                position: 'absolute', top: 'calc(100% - 8px)', left: 0, right: 0, zIndex: 41,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                boxShadow: '0 16px 40px rgba(22,22,20,0.18)', overflow: 'hidden',
+                animation: 'slideDown 0.18s ease both',
+              }}>
+              <button onClick={() => { setFridgeMenuOpen(false); fridgeCameraRef.current?.click() }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 tap-target transition-all text-left"
+                style={{ color: 'var(--text)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <Camera size={18} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontSize: 14, fontWeight: 500 }}>Take a photo</span>
+              </button>
+              <button onClick={() => { setFridgeMenuOpen(false); fridgeLibraryRef.current?.click() }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 tap-target transition-all text-left"
+                style={{ color: 'var(--text)', borderTop: '1px solid var(--border)' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <ImageIcon size={18} style={{ color: 'var(--accent)' }} />
+                <span style={{ fontSize: 14, fontWeight: 500 }}>Choose from library</span>
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Confirm detected ingredients — vision can misread, so let the user edit */}
+      {fridgeIngredients && (
+        <div className="card p-5 mb-4" style={{ animation: 'slideUp 0.3s ease both', border: '1px solid var(--accent)' }}>
+          <div className="flex items-center justify-between mb-1">
+            <p className="font-display font-semibold" style={{ fontSize: 15.5, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+              {fridgeIngredients.length ? 'Here\u2019s what I spotted' : 'Add your ingredients'}
+            </p>
+            <button onClick={resetFridge} className="tap-target" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
+              Clear
+            </button>
+          </div>
+          <p style={{ fontSize: 12.5, color: 'var(--text-3)', marginBottom: 12, lineHeight: 1.45 }}>
+            Tap to remove anything wrong, or add what I missed — then find meals.
+          </p>
+
+          {fridgeIngredients.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {fridgeIngredients.map(item => (
+                <span key={item} className="flex items-center gap-1.5 capitalize"
+                  style={{ fontSize: 13, padding: '6px 10px', borderRadius: 99, background: 'var(--accent-light)', border: '1px solid var(--accent)', color: 'var(--accent-text)' }}>
+                  {item}
+                  <button onClick={() => removeFridgeIngredient(item)} aria-label={`Remove ${item}`} style={{ display: 'flex', color: 'var(--accent-text)' }}>
+                    <X size={13} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="flex gap-2 mb-4">
+            <input className="input flex-1" placeholder="Add an ingredient…"
+              value={fridgeInput} onChange={e => setFridgeInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addFridgeIngredient())} />
+            <button onClick={addFridgeIngredient} disabled={!fridgeInput.trim()} className="btn-secondary btn gap-1.5 tap-target shrink-0">
+              <Plus size={15} /> Add
+            </button>
+          </div>
+
+          <button onClick={handleFridgeFindMeals} disabled={loading || !fridgeIngredients.length}
+            className="btn-primary btn w-full tap-target gap-2">
+            {loading
+              ? <><Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> Finding meals…</>
+              : <><Sparkles size={16} /> Find meals I can make</>}
+          </button>
+        </div>
+      )}
+
+      {/* Library matches from fridge — fuzzy, with "you'll still need" */}
+      {fridgeMatches && fridgeMatches.length > 0 && (
+        <div className="mb-6" style={{ animation: 'slideUp 0.4s ease both' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Refrigerator size={16} style={{ color: 'var(--accent)' }} />
+            <p className="font-semibold" style={{ fontSize: 16, color: 'var(--text)' }}>
+              {fridgeMatches.length} meal{fridgeMatches.length === 1 ? '' : 's'} from your library
+            </p>
+          </div>
+          <div className="flex flex-col gap-2.5">
+            {fridgeMatches.map(({ meal, missing, ratio }) => (
+              <div key={meal.id} className="card p-4" style={{ border: missing.length === 0 ? '1px solid var(--success)' : '1px solid var(--border)' }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-semibold" style={{ fontSize: 15, color: 'var(--text)' }}>{meal.item_name}</p>
+                      <span className="badge" style={{ fontSize: 10, background: 'var(--surface-2)', color: 'var(--text-2)' }}>{meal.category}</span>
+                      {missing.length === 0 && (
+                        <span className="badge" style={{ fontSize: 10, background: 'var(--success-light)', color: 'var(--success)', border: 'none' }}>
+                          Ready to cook
+                        </span>
+                      )}
+                    </div>
+                    {missing.length > 0 ? (
+                      <p style={{ fontSize: 12.5, color: 'var(--text-2)', marginTop: 5, lineHeight: 1.45 }}>
+                        You'll still need: <span style={{ color: 'var(--accent-text)', fontWeight: 500 }} className="capitalize">{missing.join(', ')}</span>
+                      </p>
+                    ) : (
+                      <p style={{ fontSize: 12.5, color: 'var(--success)', marginTop: 5 }}>You have everything for this!</p>
+                    )}
+                  </div>
+                  <div className="shrink-0 text-center" style={{ minWidth: 44 }}>
+                    <div className="nums font-bold" style={{ fontSize: 17, color: ratio === 1 ? 'var(--success)' : 'var(--accent)' }}>{Math.round(ratio * 100)}%</div>
+                    <div style={{ fontSize: 9.5, color: 'var(--text-3)' }}>have</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 10, textAlign: 'center' }}>
+            These are already in your library — head to the planner to add them to your week.
+          </p>
+        </div>
+      )}
 
       {/* divider */}
       <div className="flex items-center gap-3 mb-4" style={{ animation: 'slideUp 0.4s ease 0.045s both' }}>

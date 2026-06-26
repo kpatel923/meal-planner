@@ -13,6 +13,7 @@ import { buildGroceryList } from '../lib/mealLogic'
 import { generatePlanDescription } from '../lib/aiFeatures'
 import { weeklyNutritionTotals, nutritionColor } from '../lib/nutrition'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
+import { optimizeForMacros } from '../lib/macroOptimizer'
 import { formatCost } from '../lib/budget'
 import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
 import RecipeDetailModal from '../components/RecipeDetailModal'
@@ -26,7 +27,7 @@ import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
   CalendarPlus, RefreshCw, BarChart3,
-  ShoppingCart, MoreHorizontal, Bookmark,
+  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -51,7 +52,7 @@ export default function PlannerPage() {
     undoStack, prevPlanSnapshot, planDesc,
     setDietTypes, setServings, setAvoidRepeats, setPlanDesc,
     generate, regenerateDay, undoRegenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
-    undoGenerate, clearUndoGenerate,
+    undoGenerate, clearUndoGenerate, applyOptimizedPlan,
     clearPlan, togglePrep, isPrepDone, prepProgress,
   } = usePlanStore()
   const { savePlan, plans } = usePlans()
@@ -64,6 +65,11 @@ export default function PlannerPage() {
   const [saving,         setSaving]         = useState(false)
   const [showRegenModal, setShowRegenModal] = useState(false)
   const [regenSaveName,  setRegenSaveName]  = useState('')
+  const [showTune,       setShowTune]       = useState(false)
+  const [tuneCalories,   setTuneCalories]   = useState(profile?.daily_calories ? String(profile.daily_calories) : '')
+  const [tuneProtein,    setTuneProtein]    = useState(profile?.daily_protein ? String(profile.daily_protein) : '')
+  const [tuning,         setTuning]         = useState(false)
+  const [tuneResult,     setTuneResult]     = useState(null)
   const [swapTarget,     setSwapTarget]     = useState(null)
   const [moveTarget,     setMoveTarget]     = useState(null)
   const [swapSearch,     setSwapSearch]     = useState('')
@@ -122,6 +128,30 @@ export default function PlannerPage() {
     setRegenSaveName('')
     toast.success(`Saved "${name}"`)
     doGenerate()
+  }
+
+  function handleApplyTune() {
+    const cal = parseInt(tuneCalories, 10)
+    const pro = parseInt(tuneProtein, 10)
+    const target = {}
+    if (Number.isFinite(cal) && cal > 0) target.calories = cal
+    if (Number.isFinite(pro) && pro > 0) target.protein_g = pro
+    if (!target.calories && !target.protein_g) { toast.error('Set a calorie or protein target first'); return }
+    if (!weeklyPlan) return
+    setTuning(true)
+    // Defer so the UI can paint the loading state before the (sync) crunch.
+    setTimeout(() => {
+      try {
+        const res = optimizeForMacros(weeklyPlan, filteredMeals, target, { dietTypes })
+        applyOptimizedPlan(res.plan)
+        setTuneResult({ before: res.before, perDay: res.perDay, target, improved: res.improved })
+        if (res.improved) toast.success('Plan tuned toward your goals')
+        else toast('Already as close as your library allows', { icon: 'ℹ️' })
+      } catch {
+        toast.error('Could not tune the plan')
+      }
+      setTuning(false)
+    }, 30)
   }
 
   async function handleRegenerateDay(dayIdx) {
@@ -332,6 +362,13 @@ export default function PlannerPage() {
                   ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
                   : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span></>}
               </button>
+
+              {weeklyPlan && (
+                <button onClick={() => setShowTune(true)}
+                  className="btn-secondary btn tap-target gap-2" style={{ height: 36 }}>
+                  <SlidersHorizontal size={15} /> <span className="hidden sm:inline">Tune</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -766,6 +803,72 @@ export default function PlannerPage() {
         </div>
       )}
 
+      {/* ════════ Tune this plan (macro targeting) ════════ */}
+      {showTune && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+          onClick={e => e.target === e.currentTarget && setShowTune(false)}>
+          <div className="w-full max-w-md card" style={{ maxHeight: '85dvh', overflowY: 'auto', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+            <div className="flex items-center justify-between px-6 pt-6 pb-1">
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center rounded-2xl" style={{ width: 40, height: 40, background: 'var(--brand-light)' }}>
+                  <SlidersHorizontal size={19} style={{ color: 'var(--brand)' }} />
+                </div>
+                <h3 className="font-display font-semibold" style={{ fontSize: 20, color: 'var(--text)', letterSpacing: '-0.02em' }}>Tune this plan</h3>
+              </div>
+              <button onClick={() => setShowTune(false)} className="btn-ghost btn-icon"><X size={19} /></button>
+            </div>
+            <p className="px-6" style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 16 }}>
+              Set daily targets and I'll swap meals to get the week's average as close as your library allows — then show you exactly how close.
+            </p>
+
+            <div className="px-6 grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="input-label flex items-center gap-1.5"><Flame size={11} /> Calories / day</label>
+                <input className="input" type="number" min="0" inputMode="numeric" placeholder="e.g. 2000"
+                  value={tuneCalories} onChange={e => setTuneCalories(e.target.value)} />
+              </div>
+              <div>
+                <label className="input-label">Protein / day (g)</label>
+                <input className="input" type="number" min="0" inputMode="numeric" placeholder="e.g. 140"
+                  value={tuneProtein} onChange={e => setTuneProtein(e.target.value)} />
+              </div>
+            </div>
+
+            {/* Honest result: target vs achieved */}
+            {tuneResult && (
+              <div className="mx-6 mb-4 rounded-2xl p-4" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 10 }}>Result · daily average</p>
+                {tuneResult.target.calories != null && (
+                  <TuneRow label="Calories" achieved={Math.round(tuneResult.perDay.calories)} target={tuneResult.target.calories} unit="" />
+                )}
+                {tuneResult.target.protein_g != null && (
+                  <div style={{ marginTop: 10 }}>
+                    <TuneRow label="Protein" achieved={Math.round(tuneResult.perDay.protein_g)} target={tuneResult.target.protein_g} unit="g" />
+                  </div>
+                )}
+                <p style={{ fontSize: 11.5, color: 'var(--text-3)', marginTop: 12, lineHeight: 1.45 }}>
+                  This is the closest combination from your current recipes. Add more varied meals to hit targets more precisely.
+                </p>
+              </div>
+            )}
+
+            <div className="px-6 pb-6 flex flex-col gap-2">
+              <button onClick={handleApplyTune} disabled={tuning} className="btn-primary btn w-full tap-target gap-2">
+                {tuning ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <SlidersHorizontal size={15} />}
+                {tuneResult ? 'Re-tune' : 'Tune my plan'}
+              </button>
+              {tuneResult && prevPlanSnapshot && (
+                <button onClick={() => { undoGenerate(); setTuneResult(null); toast.success('Reverted') }} className="btn-secondary btn w-full tap-target gap-2">
+                  <Undo2 size={15} /> Undo tune
+                </button>
+              )}
+              <button onClick={() => setShowTune(false)} className="btn-ghost btn w-full tap-target">Done</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ════════ Regenerate confirmation ════════ */}
       {showRegenModal && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
@@ -821,6 +924,30 @@ export default function PlannerPage() {
         <RecipeDetailModal meal={allMeals.find(m => m.id === viewMeal.id) || viewMeal} onClose={() => setViewMeal(null)}
           onToggleFavorite={(m) => m.id && toggleFavorite(m.id, m.is_favorite)} />
       )}
+    </div>
+  )
+}
+
+// ── Tune result row: achieved vs target with honest gap ───────────────
+function TuneRow({ label, achieved, target, unit }) {
+  const pct = target > 0 ? Math.min(100, Math.round((achieved / target) * 100)) : 0
+  const diff = achieved - target
+  const close = Math.abs(diff) / target <= 0.08   // within 8% = "on target"
+  const color = close ? 'var(--success)' : 'var(--accent)'
+  return (
+    <div>
+      <div className="flex justify-between items-baseline" style={{ fontSize: 12, marginBottom: 4 }}>
+        <span style={{ color: 'var(--text-2)' }}>{label}</span>
+        <span className="nums" style={{ color: 'var(--text)', fontWeight: 600 }}>
+          {achieved.toLocaleString()}{unit} <span style={{ color: 'var(--text-3)', fontWeight: 400 }}>/ {target.toLocaleString()}{unit} goal</span>
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', borderRadius: 99, background: color, width: `${pct}%`, transition: 'width 0.5s cubic-bezier(0.22,1,0.36,1)' }} />
+      </div>
+      <p style={{ fontSize: 11, color: close ? 'var(--success)' : 'var(--text-3)', marginTop: 4 }}>
+        {close ? 'On target' : `${diff > 0 ? '+' : ''}${diff.toLocaleString()}${unit} vs goal`}
+      </p>
     </div>
   )
 }

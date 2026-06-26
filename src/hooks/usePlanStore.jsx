@@ -219,6 +219,18 @@ export function PlanProvider({ children }) {
     setPrevPlanSnapshot(null)
   }, [])
 
+  // Apply a macro-optimized plan in place, snapshotting the prior plan so the
+  // whole tune can be undone (reuses the generate-undo mechanism).
+  const applyOptimizedPlan = useCallback((newPlan) => {
+    setWeeklyPlan(prev => {
+      if (prev) setPrevPlanSnapshot(prev)
+      persistPlan(newPlan)
+      return newPlan
+    })
+    if (undoGenTimerRef.current) clearTimeout(undoGenTimerRef.current)
+    undoGenTimerRef.current = setTimeout(() => setPrevPlanSnapshot(null), 15000)
+  }, [])
+
   const clearPlan = useCallback(() => {
     setWeeklyPlan(null)
     setPrepChecked({})
@@ -261,7 +273,7 @@ export function PlanProvider({ children }) {
       prepChecked, undoStack, planDesc, avoidRepeats, prevPlanSnapshot, dayUndo,
       setDietTypes, setExpandedDay, setPlanDesc, setServings, setAvoidRepeats,
       generate, regenerateDay, undoRegenerateDay, clearDayUndo, swapMeal, reorderMeal, undoSwap, clearUndo,
-      undoGenerate, clearUndoGenerate,
+      undoGenerate, clearUndoGenerate, applyOptimizedPlan,
       loadPlan, clearPlan, togglePrep, isPrepDone, prepProgress,
     }}>
       {children}

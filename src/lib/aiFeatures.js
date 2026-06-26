@@ -238,3 +238,47 @@ Respond with JSON ONLY, no markdown backticks, no preamble:
     throw new Error('Could not read that photo — try a clearer shot of the dish')
   }
 }
+
+// ── Cook from fridge: detect ingredients from a photo ─────────────────
+// Returns a de-duplicated list of food ingredients visible in a photo of a
+// fridge, pantry, or pile of groceries. The user confirms/edits before we
+// suggest meals, so this is best-effort detection, not a final answer.
+export async function detectFridgeIngredients(imageBase64) {
+  if (!imageBase64) throw new Error('No image provided')
+
+  const prompt = `Look at this photo of someone's fridge, pantry, or grocery items. List every distinct FOOD INGREDIENT you can identify.
+
+Rules:
+- Only list actual food ingredients (e.g. "eggs", "spinach", "chicken", "milk", "cheddar cheese").
+- Use simple, common names — not brands. "milk" not "Horizon 2% Organic".
+- Combine duplicates; list each ingredient once.
+- Ignore non-food items, containers, and condiments you can't clearly identify.
+- If you can't tell what something is, leave it out rather than guess.
+
+Respond with JSON ONLY, no markdown, no preamble:
+{"isFood":true,"ingredients":["eggs","milk","spinach","chicken","cheddar cheese"]}
+
+If the photo contains no identifiable food, respond:
+{"isFood":false,"ingredients":[]}`
+
+  const raw = await callAI(prompt, 400, imageBase64)
+  try {
+    const clean = raw.replace(/```json|```/g, '').trim()
+    const parsed = JSON.parse(clean)
+    if (parsed.isFood === false || !Array.isArray(parsed.ingredients) || parsed.ingredients.length === 0) {
+      throw new Error("Couldn't spot any ingredients — try a clearer, well-lit photo")
+    }
+    // normalize: trim, lowercase, dedupe, drop empties
+    const seen = new Set()
+    const list = []
+    for (const item of parsed.ingredients) {
+      const v = String(item || '').trim().toLowerCase()
+      if (v && !seen.has(v)) { seen.add(v); list.push(v) }
+    }
+    return list
+  } catch (e) {
+    if (e.message?.includes("Couldn't spot")) throw e
+    console.error('Failed to parse fridge detection:', raw)
+    throw new Error('Could not read that photo — try a clearer, well-lit shot')
+  }
+}

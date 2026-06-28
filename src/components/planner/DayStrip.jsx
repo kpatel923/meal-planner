@@ -1,4 +1,3 @@
-import { useRef, useEffect } from 'react'
 import { DAYS, CATEGORIES } from '../../lib/mealLogic'
 
 const SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -12,18 +11,9 @@ const SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
  * @param todayIdx   0-6 index of today, or -1
  */
 export default function DayStrip({ weeklyPlan, activeDay, onSelect, isPrepDone, weekDates, todayIdx }) {
-  const tabRefs = useRef([])
-
-  useEffect(() => {
-    const el = tabRefs.current[activeDay]
-    if (el?.scrollIntoView) {
-      el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-    }
-  }, [activeDay])
-
   return (
     <div
-      className="day-strip-scroll flex gap-1.5 overflow-x-auto px-1 py-1"
+      className="flex gap-1 px-1 py-1"
       role="tablist" aria-label="Days of the week"
     >
       {DAYS.map((day, i) => {
@@ -36,14 +26,13 @@ export default function DayStrip({ weeklyPlan, activeDay, onSelect, isPrepDone, 
         return (
           <button
             key={day}
-            ref={el => (tabRefs.current[i] = el)}
             role="tab"
             aria-selected={isActive}
             aria-label={`${day}${isToday ? ', today' : ''}, ${planned.length} meals planned`}
             onClick={() => onSelect(i)}
-            className="day-tab-snap shrink-0 flex flex-col items-center transition-all tap-target"
+            className="flex flex-col items-center transition-all tap-target"
             style={{
-              minWidth: 54, padding: '8px 10px 7px',
+              flex: 1, minWidth: 0, padding: '8px 2px 7px',
               borderRadius: 14,
               background: isActive ? 'var(--brand)' : 'var(--surface)',
               border: `1px solid ${isActive ? 'var(--brand)' : 'var(--border)'}`,
@@ -60,7 +49,7 @@ export default function DayStrip({ weeklyPlan, activeDay, onSelect, isPrepDone, 
               {SHORT[i]}
             </span>
             <span className="nums" style={{
-              fontSize: 19, fontWeight: 700, lineHeight: 1.15, marginTop: 1,
+              fontSize: 17, fontWeight: 700, lineHeight: 1.15, marginTop: 1,
               color: isActive ? '#fff' : (isToday ? 'var(--accent-text)' : 'var(--text)'),
             }}>
               {dateNum}

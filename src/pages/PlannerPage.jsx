@@ -14,6 +14,7 @@ import { generatePlanDescription } from '../lib/aiFeatures'
 import { weeklyNutritionTotals, nutritionColor } from '../lib/nutrition'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { optimizeForMacros } from '../lib/macroOptimizer'
+import { SEED_RECIPES } from '../lib/seedRecipes'
 import { formatCost } from '../lib/budget'
 import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
 import RecipeDetailModal from '../components/RecipeDetailModal'
@@ -27,7 +28,7 @@ import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
   CalendarPlus, RefreshCw, BarChart3,
-  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame, Trash2,
+  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -71,6 +72,7 @@ export default function PlannerPage() {
   const [tuning,         setTuning]         = useState(false)
   const [tuneResult,     setTuneResult]     = useState(null)
   const [tuneConfirmClear, setTuneConfirmClear] = useState(false)
+  const [seeding, setSeeding] = useState(false)
   const [swapTarget,     setSwapTarget]     = useState(null)
   const [moveTarget,     setMoveTarget]     = useState(null)
   const [swapSearch,     setSwapSearch]     = useState('')
@@ -82,7 +84,7 @@ export default function PlannerPage() {
   const [mobileSheet,    setMobileSheet]    = useState(null) // 'overview' | 'grocery' | 'ai' | 'actions' | null
 
   // Single meals fetch — filter client-side instead of a second query.
-  const { meals: allMeals, loading: mealsLoading, toggleFavorite } = useMeals()
+  const { meals: allMeals, loading: mealsLoading, toggleFavorite, bulkAddMeals } = useMeals()
   const filteredMeals = useMemo(
     () => allMeals.filter(m => dietTypes.includes(m.diet_type)),
     [allMeals, dietTypes],
@@ -128,6 +130,13 @@ export default function PlannerPage() {
     setRegenSaveName('')
     toast.success(`Saved "${name}"`)
     doGenerate()
+  }
+
+  async function handleAddStarters() {
+    setSeeding(true)
+    const { error } = await bulkAddMeals(SEED_RECIPES.map(r => ({ ...r, source: 'manual' })))
+    setSeeding(false)
+    if (!error) toast.success(`Added ${SEED_RECIPES.length} starter recipes!`)
   }
 
   function handleApplyTune() {
@@ -390,7 +399,9 @@ export default function PlannerPage() {
         <div className="flex-1 px-4 sm:px-6 lg:px-8 py-5 pb-40 lg:pb-8">
           {!weeklyPlan ? (
             <EmptyPlan generating={generating} onGenerate={handleGenerate} mealCount={filteredMeals.length}
-              hasSavedPlans={plans?.length > 0} onLoadSaved={() => navigate('/saved')} />
+              hasSavedPlans={plans?.length > 0} onLoadSaved={() => navigate('/saved')}
+              onAddStarters={handleAddStarters} seeding={seeding} starterCount={SEED_RECIPES.length}
+              onGoToRecipes={() => navigate('/recipes')} />
           ) : (
             <div key={activeDay} className="day-content-in" style={{ maxWidth: 640, margin: '0 auto' }}>
               {/* Day header */}
@@ -419,12 +430,18 @@ export default function PlannerPage() {
                   </p>
                 </div>
                 <button onClick={() => handleRegenerateDay(activeDay)} disabled={regenDay === activeDay}
-                  className="flex items-center gap-1.5 rounded-xl tap-target px-3"
-                  style={{ height: 30, border: '1px solid var(--border-2)', color: 'var(--text-2)', fontSize: 11.5 }}>
+                  title="Shuffle this day" aria-label="Shuffle this day"
+                  className="flex items-center justify-center tap-target transition-all active:scale-90"
+                  style={{
+                    width: 32, height: 32, borderRadius: 9,
+                    background: 'transparent', border: 'none',
+                    color: 'var(--text-3)',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--surface-2)'; e.currentTarget.style.color = 'var(--text)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-3)' }}>
                   {regenDay === activeDay
-                    ? <Loader2 size={13} className="animate-[spin_1s_linear_infinite]" />
-                    : <RotateCcw size={13} />}
-                  Regen day
+                    ? <Loader2 size={15} className="animate-[spin_1s_linear_infinite]" />
+                    : <RotateCcw size={15} />}
                 </button>
               </div>
 
@@ -996,7 +1013,7 @@ function UndoToast({ label, onUndo, onDismiss }) {
 }
 
 // ── Empty state: no plan at all ───────────────────────────────────────
-function EmptyPlan({ generating, onGenerate, mealCount, hasSavedPlans, onLoadSaved }) {
+function EmptyPlan({ generating, onGenerate, mealCount, hasSavedPlans, onLoadSaved, onAddStarters, seeding, starterCount, onGoToRecipes }) {
   return (
     <div className="flex flex-col items-center justify-center text-center" style={{ minHeight: 380, gap: 14, maxWidth: 360, margin: '0 auto' }}>
       <div className="flex items-center justify-center rounded-2xl" style={{ width: 64, height: 64, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
@@ -1014,13 +1031,26 @@ function EmptyPlan({ generating, onGenerate, mealCount, hasSavedPlans, onLoadSav
           ? <><Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> Building…</>
           : <><Wand2 size={16} /> Generate week</>}
       </button>
-      {hasSavedPlans && (
-        <button onClick={onLoadSaved} className="btn-ghost btn gap-2" style={{ fontSize: 13.5 }}>
-          <Bookmark size={15} /> Or load a saved plan
-        </button>
-      )}
-      {mealCount === 0 && (
-        <p style={{ fontSize: 12.5, color: 'var(--text-3)' }}>Add some recipes first to get started.</p>
+      {mealCount === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-2xl p-5 w-full" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+          <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.5 }}>
+            You don't have any recipes yet. Add a starter set to generate your first plan instantly.
+          </p>
+          <button onClick={onAddStarters} disabled={seeding}
+            className="btn-primary btn tap-target gap-2 w-full">
+            {seeding ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Sparkles size={16} />}
+            {seeding ? 'Adding…' : `Add ${starterCount} starter recipes`}
+          </button>
+          <button onClick={onGoToRecipes} className="btn-ghost btn gap-2 w-full" style={{ fontSize: 13 }}>
+            <BookOpen size={15} /> Or add your own
+          </button>
+        </div>
+      ) : (
+        hasSavedPlans && (
+          <button onClick={onLoadSaved} className="btn-ghost btn gap-2" style={{ fontSize: 13.5 }}>
+            <Bookmark size={15} /> Or load a saved plan
+          </button>
+        )
       )}
     </div>
   )

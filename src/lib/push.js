@@ -43,6 +43,9 @@ export async function enablePush(userId) {
   }
 
   const json = sub.toJSON()
+  // Capture the device's timezone so reminders compute "today" correctly.
+  let timezone = 'UTC'
+  try { timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC' } catch {}
   // Upsert by endpoint so re-subscribing doesn't create duplicates.
   const { error } = await supabase.from('push_subscriptions').upsert({
     user_id: userId,
@@ -50,6 +53,7 @@ export async function enablePush(userId) {
     p256dh: json.keys?.p256dh,
     auth: json.keys?.auth,
     user_agent: navigator.userAgent,
+    timezone,
   }, { onConflict: 'endpoint' })
 
   if (error) return { ok: false, reason: 'save-failed' }

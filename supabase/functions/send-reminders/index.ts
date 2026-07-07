@@ -69,8 +69,8 @@ Deno.serve(async (req) => {
 
     // Build the message for a given user's active plan. Returns null to SKIP
     // this user (e.g. "did-you-cook" when they already cooked, or no plan).
-    function personalize(type: string, plan: any, prep: any): { title: string; body: string; url: string; tag: string } | null {
-      const todayIdx = serverDayIndex()   // 0=Mon..6=Sun to match the app
+    function personalize(type: string, plan: any, prep: any, timezone?: string): { title: string; body: string; url: string; tag: string } | null {
+      const todayIdx = serverDayIndex(timezone)   // 0=Mon..6=Sun in user's zone
       const day = plan?.[todayIdx] || plan?.[String(todayIdx)]
       if (type === 'cook-dinner') {
         const dinner = day?.Dinner
@@ -109,7 +109,7 @@ Deno.serve(async (req) => {
       // Join subscriptions with each user's active plan and send per-user.
       const { data: subs, error } = await supabase
         .from('push_subscriptions')
-        .select('endpoint, p256dh, auth, user_id')
+        .select('endpoint, p256dh, auth, user_id, timezone')
       if (error) throw error
 
       const userIds = [...new Set((subs || []).map((s) => s.user_id))]
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
 
       await Promise.all((subs || []).map(async (s) => {
         const row = planByUser.get(s.user_id)
-        const msg = personalize(reqType, row?.plan_json, row?.prep_json)
+        const msg = personalize(reqType, row?.plan_json, row?.prep_json, s.timezone)
         if (!msg) return   // skip this user
         const subscription = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }
         try {
@@ -164,8 +164,15 @@ Deno.serve(async (req) => {
   }
 })
 
-// Server day index matching the app: Monday=0 … Sunday=6.
-function serverDayIndex(): number {
-  const js = new Date().getUTCDay()   // 0=Sun..6=Sat
-  return (js + 6) % 7
+// Day index (Monday=0 … Sunday=6) computed in a given IANA timezone.
+function serverDayIndex(timezone?: string): number {
+  try {
+    const tz = timezone || 'UTC'
+    // en-US weekday in the target zone → map to Mon=0..Sun=6.
+    const wd = new Intl.DateTimeFormat('en-US', { weekday: 'short', timeZone: tz }).format(new Date())
+    const map: Record<string, number> = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }
+    return map[wd] ?? ((new Date().getUTCDay() + 6) % 7)
+  } catch {
+    return (new Date().getUTCDay() + 6) % 7
+  }
 }

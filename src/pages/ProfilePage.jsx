@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../hooks/useAuth'
+import { enablePush, disablePush, isSubscribed, pushSupported, pushPermission } from '../lib/push'
 import { useTheme } from '../hooks/useTheme'
 import { useMeals } from '../hooks/useMeals'
 import { usePlans } from '../hooks/usePlans'
@@ -7,7 +8,7 @@ import { usePlanStore } from '../hooks/usePlanStore'
 import { exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
 import { getMostUsedMeals } from '../lib/avoidRepeats'
 import { weeklyBudgetTotal, budgetToTier, formatCost, BUDGET_TAG_STYLES } from '../lib/budget'
-import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, DollarSign, Award, Trash2, Package, Target, Plus, Flame } from 'lucide-react'
+import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, DollarSign, Award, Trash2, Package, Target, Plus, Flame, Bell } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
@@ -43,6 +44,9 @@ export default function ProfilePage() {
   const [dailyCalories, setDailyCalories] = useState(profile?.daily_calories != null ? String(profile.daily_calories) : '')
   const [dailyProtein, setDailyProtein] = useState(profile?.daily_protein != null ? String(profile.daily_protein) : '')
   const [savingGoals, setSavingGoals] = useState(false)
+  const [notifOn, setNotifOn] = useState(false)
+  const [notifBusy, setNotifBusy] = useState(false)
+  const [notifState, setNotifState] = useState(pushPermission())
   const [mostUsed,     setMostUsed]     = useState([])
   const [loadingUsage, setLoadingUsage] = useState(true)
 
@@ -129,6 +133,40 @@ export default function ProfilePage() {
     const { error } = await updateProfile({ pantry_items: pantryItems })
     setSavingPantry(false)
     if (error) toast.error('Could not save pantry'); else toast.success('Pantry saved')
+  }
+
+  useEffect(() => {
+    isSubscribed().then(setNotifOn).catch(() => {})
+  }, [])
+
+  async function handleToggleNotifs() {
+    if (!user) return
+    setNotifBusy(true)
+    try {
+      if (notifOn) {
+        await disablePush(user.id)
+        setNotifOn(false)
+        toast.success('Reminders turned off')
+      } else {
+        const res = await enablePush(user.id)
+        setNotifState(pushPermission())
+        if (res.ok) {
+          setNotifOn(true)
+          toast.success('Reminders on — you\u2019ll get a weekly nudge')
+        } else if (res.reason === 'denied') {
+          toast.error('Notifications were blocked')
+        } else if (res.reason === 'unsupported') {
+          toast.error('Install the app to your home screen first')
+        } else if (res.reason === 'no-vapid-key') {
+          toast.error('Push not configured yet')
+        } else {
+          toast.error('Could not enable reminders')
+        }
+      }
+    } catch {
+      toast.error('Something went wrong')
+    }
+    setNotifBusy(false)
   }
 
   async function handleSaveGoals() {
@@ -415,6 +453,32 @@ export default function ProfilePage() {
           {savingGoals ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
           Save goals
         </button>
+      </div>
+
+      {/* ── Reminders / notifications ─────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.189s both' }}>
+        <h3 className="font-semibold mb-1 flex items-center gap-2" style={{ fontSize: '16px', color: 'var(--text)' }}>
+          <Bell size={17} style={{ color: 'var(--brand)' }} /> Reminders
+        </h3>
+        <p style={{ fontSize: '13px', color: 'var(--text-3)', marginBottom: '16px' }}>
+          Get a gentle nudge each week to plan your meals and shop. {!pushSupported() && 'Not supported on this browser — install the app to your home screen first.'}
+        </p>
+        {notifState === 'denied' ? (
+          <p style={{ fontSize: 13, color: 'var(--danger)' }}>
+            Notifications are blocked. Enable them for this app in your device settings, then come back.
+          </p>
+        ) : (
+          <div className="flex items-center justify-between">
+            <span style={{ fontSize: 14, color: 'var(--text)' }}>Weekly planning reminder</span>
+            <button onClick={handleToggleNotifs} disabled={notifBusy || !pushSupported()}
+              role="switch" aria-checked={notifOn}
+              className="relative rounded-full transition-all duration-300 shrink-0"
+              style={{ width: 52, height: 30, background: notifOn ? 'var(--brand)' : 'var(--border-2)', border: 'none', cursor: pushSupported() ? 'pointer' : 'not-allowed', opacity: pushSupported() ? 1 : 0.5, padding: 0 }}>
+              <span className="absolute rounded-full bg-white shadow-md transition-transform duration-300"
+                style={{ width: 24, height: 24, top: 3, left: 3, transform: notifOn ? 'translateX(22px)' : 'translateX(0)' }} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Most-used meals ───────────────────────────── */}

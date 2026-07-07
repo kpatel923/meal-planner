@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useRef } from 'react'
 import { buildWeeklyPlan } from '../lib/mealLogic'
 import { getRecentlyUsedMeals, applyAvoidRepeats, recordMealsUsed } from '../lib/avoidRepeats'
+import { syncActivePlan, clearActivePlan } from '../lib/planSync'
 
 const PlanContext = createContext(null)
 const SERVINGS_KEY = 'mealplan_servings'
@@ -57,9 +58,11 @@ export function PlanProvider({ children }) {
       if (plan) localStorage.setItem(PLAN_KEY, JSON.stringify(plan))
       else localStorage.removeItem(PLAN_KEY)
     } catch {}
+    syncActivePlan({ plan: plan || null, servings })   // mirror to server (debounced)
   }
   function persistPrep(prep) {
     try { localStorage.setItem(PREP_KEY, JSON.stringify(prep || {})) } catch {}
+    syncActivePlan({ prep: prep || {} })
   }
 
   // generate() now optionally takes a userId to apply avoid-repeats logic.
@@ -241,6 +244,7 @@ export function PlanProvider({ children }) {
       localStorage.removeItem(PLAN_KEY)
       localStorage.removeItem(PREP_KEY)
     } catch {}
+    clearActivePlan()
   }, [])
 
   const togglePrep = useCallback((dayIdx, category) => {

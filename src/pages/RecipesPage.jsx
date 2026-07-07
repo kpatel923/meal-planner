@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useMeals } from '../hooks/useMeals'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -8,7 +8,7 @@ import { nutritionColor } from '../lib/nutrition'
 import { getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { SEED_RECIPES } from '../lib/seedRecipes'
-import { parseRecipeFromURL, analyzeMealPhoto } from '../lib/aiFeatures'
+import { parseRecipeFromURL, analyzeMealPhoto, generateRecipeFromName } from '../lib/aiFeatures'
 import { fileToCompressedDataURL } from '../lib/imageUtils'
 import RecipeDetailModal, { DIET_COLORS, SOURCE_BADGES, CAT_ICONS, getVideoMeta } from '../components/RecipeDetailModal'
 import {
@@ -35,6 +35,7 @@ export default function RecipesPage() {
   const [editMeal,     setEditMeal]     = useState(null)
   const [viewMeal,     setViewMeal]     = useState(null)   // recipe detail modal target
   const [form,         setForm]         = useState(EMPTY)
+  const [generatingName, setGeneratingName] = useState(false)
   const [submitting,   setSubmitting]   = useState(false)
   const [importing,    setImporting]    = useState(false)
   const [importErrors, setImportErrors] = useState([])
@@ -93,6 +94,40 @@ export default function RecipesPage() {
   }
   function closeForm()     { setShowForm(false); setEditMeal(null); setForm(EMPTY); setShowDetect(false); setDetectUrl('') }
   function setField(k, v)  { setForm(p => ({ ...p, [k]:v })) }
+
+  // Warn if the typed name closely matches an existing recipe (avoid duplicates).
+  // Skips the check while editing an existing meal.
+  const duplicateMatch = useMemo(() => {
+    const name = form.item_name.trim().toLowerCase()
+    if (!name || name.length < 3 || editMeal) return null
+    return meals.find(m => m.item_name?.trim().toLowerCase() === name) || null
+  }, [form.item_name, meals, editMeal])
+
+  async function handleGenerateFromName() {
+    const name = form.item_name.trim()
+    if (!name) return
+    setGeneratingName(true)
+    const toastId = toast.loading('Generating recipe…')
+    try {
+      const r = await generateRecipeFromName(name)
+      setForm(p => ({
+        ...p,
+        item_name:    r.name || p.item_name,
+        category:     r.category || p.category,
+        diet_type:    r.diet_type || p.diet_type,
+        ingredients:  r.ingredients || p.ingredients,
+        prep_time:    r.prep_time != null ? String(r.prep_time) : p.prep_time,
+        detail_notes: r.description || p.detail_notes,
+        // Media: reliable search links (only if user hasn't set their own).
+        video_url:    p.video_url   || r.videoSearchUrl   || '',
+        written_url:  p.written_url || r.writtenSearchUrl || '',
+      }))
+      toast.success(`Filled in! (${r.confidence} confidence — review before saving)`, { id: toastId })
+    } catch (e) {
+      toast.error(e.message || 'Could not generate recipe', { id: toastId, duration: 5000 })
+    }
+    setGeneratingName(false)
+  }
 
   // ── Photo upload to Supabase Storage ─────────────────────────────
   async function handlePhotoSelect(e) {
@@ -567,9 +602,30 @@ export default function RecipesPage() {
 
               <div>
                 <label className="input-label">Meal name *</label>
-                <input className="input" value={form.item_name}
-                  onChange={e => setField('item_name', e.target.value)}
-                  placeholder="e.g. Avocado Toast" required autoFocus />
+                <div className="flex gap-2">
+                  <input className="input flex-1" value={form.item_name}
+                    onChange={e => setField('item_name', e.target.value)}
+                    placeholder="e.g. Thai Green Curry" required autoFocus />
+                  <button type="button" onClick={handleGenerateFromName}
+                    disabled={generatingName || !form.item_name.trim()}
+                    className="btn-secondary btn gap-1.5 shrink-0" title="Fill in the details with AI">
+                    {generatingName
+                      ? <Loader2 size={15} className="animate-[spin_1s_linear_infinite]" />
+                      : <Sparkles size={15} />}
+                    <span className="hidden sm:inline">Autofill</span>
+                  </button>
+                </div>
+                {duplicateMatch && (
+                  <div className="flex items-center gap-2 mt-2 px-3 py-2 rounded-lg" style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)' }}>
+                    <span style={{ fontSize: 12.5, color: 'var(--accent-text)', flex: 1 }}>
+                      You already have "{duplicateMatch.item_name}" — add anyway, or open the existing one?
+                    </span>
+                    <button type="button" onClick={() => openEdit(duplicateMatch)}
+                      style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--accent-text)', textDecoration: 'underline' }}>
+                      Open
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

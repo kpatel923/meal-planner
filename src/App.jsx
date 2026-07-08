@@ -7,6 +7,7 @@ import { PlanProvider } from './hooks/usePlanStore'
 import AuthPage          from './pages/AuthPage'
 import PublicRecipePage  from './pages/PublicRecipePage'
 import PlannerPage       from './pages/PlannerPage'
+import TodayPage         from './pages/TodayPage'
 import RecipesPage       from './pages/RecipesPage'
 import GroceryPage       from './pages/GroceryPage'
 import SavedPage         from './pages/SavedPage'
@@ -26,7 +27,7 @@ function ProtectedRoute({ children }) {
 function PublicRoute({ children }) {
   const { user, loading } = useAuth()
   if (loading) return <LoadingScreen />
-  if (user)    return <Navigate to="/planner" replace />
+  if (user)    return <Navigate to="/today" replace />
   return children
 }
 
@@ -70,7 +71,8 @@ export default function App() {
 
               {/* Protected — all inside AppLayout */}
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-                <Route index                  element={<Navigate to="/planner" replace />} />
+                <Route index                  element={<Navigate to="/today" replace />} />
+                <Route path="today"           element={<TodayPage />} />
                 <Route path="planner"         element={<PlannerPage />} />
                 <Route path="grocery"         element={<GroceryPage />} />
                 <Route path="saved"           element={<SavedPage />} />
@@ -80,7 +82,7 @@ export default function App() {
                 <Route path="profile"         element={<ProfilePage />} />
               </Route>
 
-              <Route path="*" element={<Navigate to="/planner" replace />} />
+              <Route path="*" element={<Navigate to="/today" replace />} />
             </Routes>
             <ToastWrapper />
           </BrowserRouter>

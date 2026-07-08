@@ -6,10 +6,11 @@ import Onboarding from '../Onboarding'
 import {
   CalendarDays, ShoppingCart, Bookmark,
   BookOpen, User, LogOut, ChefHat,
-  Sun, Moon, Sparkles, Users, Menu, X, ChevronRight
+  Sun, Moon, Sparkles, Users, Menu, X, ChevronRight, Home
 } from 'lucide-react'
 
 const NAV_ITEMS = [
+  { to: '/today',     label: 'Today',       icon: Home         },
   { to: '/planner',   label: 'Planner',     icon: CalendarDays },
   { to: '/grocery',   label: 'Grocery',     icon: ShoppingCart },
   { to: '/saved',     label: 'Saved',       icon: Bookmark     },
@@ -20,13 +21,14 @@ const NAV_ITEMS = [
 ]
 
 const MOBILE_NAV = [
+  { to: '/today',     label: 'Today',     icon: Home         },
   { to: '/planner',   label: 'Plan',      icon: CalendarDays },
   { to: '/grocery',   label: 'Grocery',   icon: ShoppingCart },
-  { to: '/ai',        label: 'AI Chef',   icon: Sparkles     },
   { to: '/recipes',   label: 'Recipes',   icon: BookOpen     },
 ]
 
 const MORE_ITEMS = [
+  { to: '/ai',        label: 'AI Chef',     icon: Sparkles },
   { to: '/saved',     label: 'Saved plans', icon: Bookmark },
   { to: '/household', label: 'Household',   icon: Users    },
   { to: '/profile',   label: 'Profile',     icon: User     },

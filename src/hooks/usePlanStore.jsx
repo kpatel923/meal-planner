@@ -178,6 +178,28 @@ export function PlanProvider({ children }) {
     })
   }, [])
 
+  // Optional per-day dessert (stored under the 'Dessert' key so grocery + macros
+  // pick it up automatically via their key-based iteration).
+  const setDessert = useCallback((dayIdx, meal) => {
+    setWeeklyPlan(prev => {
+      if (!prev) return prev
+      const next = { ...prev, [dayIdx]: { ...prev[dayIdx], Dessert: meal } }
+      persistPlan(next)
+      return next
+    })
+  }, [])
+
+  const removeDessert = useCallback((dayIdx) => {
+    setWeeklyPlan(prev => {
+      if (!prev || !prev[dayIdx]) return prev
+      const day = { ...prev[dayIdx] }
+      delete day.Dessert
+      const next = { ...prev, [dayIdx]: day }
+      persistPlan(next)
+      return next
+    })
+  }, [])
+
   // Reorder: move a meal from one day/category slot to another (drag-and-drop)
   const reorderMeal = useCallback((fromDayIdx, fromCategory, toDayIdx, toCategory) => {
     setWeeklyPlan(prev => {
@@ -277,6 +299,7 @@ export function PlanProvider({ children }) {
       prepChecked, undoStack, planDesc, avoidRepeats, prevPlanSnapshot, dayUndo,
       setDietTypes, setExpandedDay, setPlanDesc, setServings, setAvoidRepeats,
       generate, regenerateDay, undoRegenerateDay, clearDayUndo, swapMeal, reorderMeal, undoSwap, clearUndo,
+      setDessert, removeDessert,
       undoGenerate, clearUndoGenerate, applyOptimizedPlan,
       loadPlan, clearPlan, togglePrep, isPrepDone, prepProgress,
     }}>

@@ -10,11 +10,12 @@ import {
   buildPlanShareText, buildGroceryShareText, buildShareableURL, shareText,
 } from '../lib/sharing'
 import { buildGroceryList } from '../lib/mealLogic'
-import { generatePlanDescription } from '../lib/aiFeatures'
+import { generatePlanDescription, generateRecipeFromName } from '../lib/aiFeatures'
 import { weeklyNutritionTotals, nutritionColor } from '../lib/nutrition'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { optimizeForMacros } from '../lib/macroOptimizer'
 import { SEED_RECIPES } from '../lib/seedRecipes'
+import { recommendDesserts, aiDessertToMeal } from '../lib/desserts'
 import { formatCost } from '../lib/budget'
 import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
 import RecipeDetailModal from '../components/RecipeDetailModal'
@@ -27,8 +28,8 @@ import {
 import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
-  CalendarPlus, RefreshCw, BarChart3,
-  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen,
+  CalendarPlus, RefreshCw, BarChart3, Plus,
+  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, Home,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -53,6 +54,7 @@ export default function PlannerPage() {
     undoStack, prevPlanSnapshot, planDesc,
     setDietTypes, setServings, setAvoidRepeats, setPlanDesc,
     generate, regenerateDay, undoRegenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
+    setDessert, removeDessert,
     undoGenerate, clearUndoGenerate, applyOptimizedPlan,
     clearPlan, togglePrep, isPrepDone, prepProgress,
   } = usePlanStore()
@@ -73,6 +75,8 @@ export default function PlannerPage() {
   const [tuneResult,     setTuneResult]     = useState(null)
   const [tuneConfirmClear, setTuneConfirmClear] = useState(false)
   const [seeding, setSeeding] = useState(false)
+  const [dessertPickerDay, setDessertPickerDay] = useState(null)
+  const [dessertAiLoading, setDessertAiLoading] = useState(false)
   const [swapTarget,     setSwapTarget]     = useState(null)
   const [moveTarget,     setMoveTarget]     = useState(null)
   const [swapSearch,     setSwapSearch]     = useState('')
@@ -130,6 +134,25 @@ export default function PlannerPage() {
     setRegenSaveName('')
     toast.success(`Saved "${name}"`)
     doGenerate()
+  }
+
+  function handlePickDessert(meal) {
+    setDessert(dessertPickerDay, meal)
+    setDessertPickerDay(null)
+    toast.success('Dessert added 🍰')
+  }
+
+  async function handleAiDessert() {
+    setDessertAiLoading(true)
+    try {
+      const gen = await generateRecipeFromName('simple homemade dessert')
+      setDessert(dessertPickerDay, aiDessertToMeal(gen))
+      setDessertPickerDay(null)
+      toast.success('Dessert added 🍰')
+    } catch {
+      toast.error('Could not generate a dessert — try again')
+    }
+    setDessertAiLoading(false)
   }
 
   async function handleAddStarters() {
@@ -303,8 +326,7 @@ export default function PlannerPage() {
     const day = mergedPlan?.[activeDay]
     if (!day) return { minutes: 0, hasTime: false, cost: 0 }
     let minutes = 0, hasTime = false, cost = 0
-    CATEGORIES.forEach(cat => {
-      const meal = day[cat]
+    Object.values(day).forEach(meal => {
       if (!meal) return
       const f = getMealFacts(meal, servings)
       if (f.prepTime != null) { minutes += f.prepTime; hasTime = true }
@@ -338,6 +360,11 @@ export default function PlannerPage() {
         <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3 min-w-0">
+              <button onClick={() => navigate('/today')}
+                className="flex items-center gap-1.5 tap-target transition-all active:scale-95 shrink-0"
+                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
+                <Home size={13} /> Today
+              </button>
               <h1 className="font-display font-semibold truncate" style={{ fontSize: 20, letterSpacing: '-0.03em', color: 'var(--text)' }}>
                 {weeklyPlan ? 'Your week' : 'Plan your week'}
               </h1>
@@ -497,6 +524,26 @@ export default function PlannerPage() {
                       animDelay={i * 45}
                     />
                   ))}
+
+                  {/* Optional dessert */}
+                  {dayMeals.Dessert ? (
+                    <div className="card flex items-center gap-3 p-2.5" style={{ borderColor: 'var(--accent)' }}>
+                      <div className="flex items-center justify-center shrink-0" style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--accent-light)', fontSize: 16 }}>🍰</div>
+                      <button onClick={() => setViewMeal({ meal: dayMeals.Dessert, dayIdx: activeDay, category: 'Dessert' })} className="flex-1 min-w-0 text-left">
+                        <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>Dessert</p>
+                        <p className="font-display font-semibold truncate" style={{ fontSize: 14, color: 'var(--text)' }}>{dayMeals.Dessert.item_name}</p>
+                      </button>
+                      <button onClick={() => removeDessert(activeDay)} className="btn-ghost btn-icon shrink-0" title="Remove dessert" style={{ color: 'var(--text-3)' }}>
+                        <X size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setDessertPickerDay(activeDay)}
+                      className="flex items-center justify-center gap-2 tap-target transition-all active:scale-[0.98]"
+                      style={{ padding: '11px', borderRadius: 'var(--radius-sm)', border: '1.5px dashed var(--border-2)', background: 'transparent', color: 'var(--text-2)', fontSize: 13.5, fontWeight: 600 }}>
+                      🍰 Want dessert?
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -759,6 +806,59 @@ export default function PlannerPage() {
               <p style={{ fontSize: 11.5, color: 'var(--text-3)', textAlign: 'center' }}>
                 Moving onto an occupied slot swaps the two meals.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ Dessert picker ════════ */}
+      {dessertPickerDay !== null && (
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+          onClick={e => e.target === e.currentTarget && setDessertPickerDay(null)}>
+          <div className="w-full max-w-md card" style={{ maxHeight: '85dvh', overflowY: 'auto', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+            <div className="flex items-center justify-between px-6 pt-6 pb-1">
+              <h3 className="font-display font-semibold flex items-center gap-2" style={{ fontSize: 20, color: 'var(--text)', letterSpacing: '-0.02em' }}>
+                🍰 Add a dessert
+              </h3>
+              <button onClick={() => setDessertPickerDay(null)} className="btn-ghost btn-icon"><X size={19} /></button>
+            </div>
+            <p className="px-6" style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 14 }}>
+              For {DAYS[dessertPickerDay]}. Pick from your recipes, or let AI suggest a simple one.
+            </p>
+
+            <div className="px-6 pb-3">
+              {(() => {
+                const suggestions = recommendDesserts(allMeals, 4)
+                if (!suggestions.length) {
+                  return (
+                    <p style={{ fontSize: 13, color: 'var(--text-3)', padding: '8px 0 16px', lineHeight: 1.5 }}>
+                      No desserts found in your library yet — try the AI suggestion below, or add dessert recipes on the Recipes page.
+                    </p>
+                  )
+                }
+                return (
+                  <div className="flex flex-col gap-2 mb-3">
+                    {suggestions.map(m => (
+                      <button key={m.id} onClick={() => handlePickDessert(m)}
+                        className="card flex items-center gap-3 p-3 text-left tap-target transition-all active:scale-[0.99]">
+                        <div className="flex items-center justify-center shrink-0" style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--accent-light)', fontSize: 17 }}>🍰</div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-display font-semibold truncate" style={{ fontSize: 14, color: 'var(--text)' }}>{m.item_name}</p>
+                          {m.calories != null && <p className="nums" style={{ fontSize: 11, color: 'var(--text-3)' }}>{m.calories} cal</p>}
+                        </div>
+                        <Plus size={16} style={{ color: 'var(--accent)' }} />
+                      </button>
+                    ))}
+                  </div>
+                )
+              })()}
+
+              <button onClick={handleAiDessert} disabled={dessertAiLoading}
+                className="btn-secondary btn w-full tap-target gap-2 mb-6">
+                {dessertAiLoading ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Sparkles size={16} />}
+                Suggest one with AI
+              </button>
             </div>
           </div>
         </div>

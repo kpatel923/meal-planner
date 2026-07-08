@@ -10,7 +10,7 @@ import { computeStreak, currentWeekDays, recordCookedToday } from '../lib/streak
 import { successHaptic, tapHaptic } from '../lib/haptics'
 import RecipeDetailModal from '../components/RecipeDetailModal'
 import {
-  Flame, Clock, Sparkles,
+  Flame, Clock, Sparkles, CalendarDays,
   Check, ChefHat, Snowflake, Trophy, PartyPopper,
 } from 'lucide-react'
 
@@ -122,13 +122,19 @@ export default function TodayPage() {
         <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>
           {dateLabel}
         </p>
-        <button onClick={() => setShowStreak(true)}
-          className="flex items-center gap-1.5 tap-target"
-          style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 11px', boxShadow: 'var(--shadow-sm)' }}>
-          <Flame size={14} style={{ color: streak.current > 0 ? '#E8730C' : 'var(--text-3)' }} />
-          <span className="nums" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{streak.current}</span>
-          <span style={{ fontSize: 11, color: 'var(--text-3)' }}>day{streak.current === 1 ? '' : 's'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => navigate('/planner')}
+            className="flex items-center gap-1.5 tap-target transition-all active:scale-95"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 12px', boxShadow: 'var(--shadow-sm)', fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
+            <CalendarDays size={13} /> Full week
+          </button>
+          <button onClick={() => setShowStreak(true)}
+            className="flex items-center gap-1.5 tap-target"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 11px', boxShadow: 'var(--shadow-sm)' }}>
+            <Flame size={14} style={{ color: streak.current > 0 ? '#E8730C' : 'var(--text-3)' }} />
+            <span className="nums" style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{streak.current}</span>
+          </button>
+        </div>
       </div>
       <h1 className="font-display font-bold mb-4" style={{ fontSize: 27, letterSpacing: '-0.03em', color: 'var(--text)' }}>
         {greeting()}{name ? `, ${name}` : ''}
@@ -140,13 +146,13 @@ export default function TodayPage() {
         <>
           {/* Up-next hero, or all-done celebration */}
           {nextUp ? (
-            <div className="rounded-[18px] p-4 mb-3.5" style={{ background: 'var(--brand)', boxShadow: 'var(--shadow-brand)' }}>
+            <div className="rounded-[18px] p-4 mb-3.5" style={{ background: '#1A1C16', boxShadow: 'var(--shadow-lg)', border: '1px solid #2A2D24' }}>
               <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9BD531' }}>
                   Up next · {nextUp.category}
                 </span>
                 {getMealFacts(nextUp.meal, servings).prepTime != null && (
-                  <span className="flex items-center gap-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.55)' }}>
+                  <span className="flex items-center gap-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
                     <Clock size={11} /> {formatPrepTime(getMealFacts(nextUp.meal, servings).prepTime)}
                   </span>
                 )}
@@ -156,8 +162,8 @@ export default function TodayPage() {
               </p>
               <div className="flex gap-2.5">
                 <button onClick={() => handleStartCooking(nextUp.meal)}
-                  className="flex-1 flex items-center justify-center gap-2 tap-target font-display font-bold"
-                  style={{ background: 'var(--accent)', color: '#1A1C16', fontSize: 14, padding: 11, borderRadius: 12 }}>
+                  className="flex-1 flex items-center justify-center gap-2 tap-target font-display font-bold transition-all active:scale-[0.98]"
+                  style={{ background: '#9BD531', color: '#1A1C16', fontSize: 14, padding: 11, borderRadius: 12 }}>
                   <ChefHat size={16} /> Start cooking
                 </button>
                 <button onClick={() => setViewMeal({ meal: nextUp.meal, dayIdx: todayIdx, category: nextUp.category })}

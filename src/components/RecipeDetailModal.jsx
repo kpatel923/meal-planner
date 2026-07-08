@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSwipeToClose } from '../hooks/useSwipeToClose'
 import { supabase } from '../lib/supabase'
 import { DIET_LABELS } from '../lib/mealLogic'
 import { estimateNutrition } from '../lib/nutrition'
@@ -37,6 +38,7 @@ export function getVideoMeta(url) {
  */
 export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onToggleFavorite, onSwap, onMove }) {
   const [sharing, setSharing] = useState(false)
+  const swipe = useSwipeToClose(onClose)
   if (!meal) return null
 
   const dc = DIET_COLORS[meal.diet_type] || DIET_COLORS.veg
@@ -74,7 +76,11 @@ export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onT
 
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-panel">
+      <div className="modal-panel" style={swipe.style} {...swipe.handlers}>
+        {/* Drag handle (mobile swipe-to-close affordance) */}
+        <div className="sm:hidden flex justify-center pt-2.5 pb-1" style={{ position: 'relative', zIndex: 2 }}>
+          <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--border-2)' }} />
+        </div>
         {/* Photo */}
         {meal.photo_url && (
           <div style={{ height: '240px', overflow: 'hidden' }}>

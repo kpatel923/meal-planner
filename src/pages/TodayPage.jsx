@@ -7,18 +7,21 @@ import { CATEGORIES } from '../lib/mealLogic'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { getTodayIndex } from '../lib/weekDates'
 import { computeStreak, currentWeekDays, recordCookedToday } from '../lib/streak'
+import { successHaptic, tapHaptic } from '../lib/haptics'
 import RecipeDetailModal from '../components/RecipeDetailModal'
 import {
-  Flame, Clock, ShoppingCart, CalendarDays, Sparkles,
+  Flame, Clock, Sparkles,
   Check, ChefHat, Snowflake, Trophy, PartyPopper,
 } from 'lucide-react'
 
 const CAT_ICONS = { Breakfast: '🍳', Lunch: '🥗', Dinner: '🍝', Snack: '🍎' }
+// Keep category accents within the app palette (charcoal + lime) for
+// consistency — differentiate by icon/tint depth, not clashing hues.
 const CAT_COLOR = {
-  Breakfast: { edge: '#D9A12E', tint: 'rgba(217,161,46,0.12)' },
-  Lunch:     { edge: 'var(--accent)', tint: 'var(--accent-light)' },
-  Dinner:    { edge: 'var(--brand)', tint: 'var(--surface-3)' },
-  Snack:     { edge: '#7C9CB5', tint: 'rgba(124,156,181,0.12)' },
+  Breakfast: { edge: 'var(--accent)',    tint: 'var(--accent-light)' },
+  Lunch:     { edge: 'var(--accent)',    tint: 'var(--accent-light)' },
+  Dinner:    { edge: 'var(--brand)',     tint: 'var(--surface-3)' },
+  Snack:     { edge: 'var(--brand)',     tint: 'var(--surface-2)' },
 }
 
 function greeting() {
@@ -55,7 +58,40 @@ export default function TodayPage() {
   const planned = todayMeals.filter(m => m.meal)
   const doneCount = planned.filter(m => isPrepDone(todayIdx, m.category)).length
   const totalCount = planned.length
-  const nextUp = planned.find(m => !isPrepDone(todayIdx, m.category))
+
+  // Pick the meal to feature based on time of day, falling back sensibly.
+  // Morning → Breakfast, midday → Lunch, evening → Dinner; Snack is a filler.
+  const featured = useMemo(() => {
+    const byCat = {}
+    planned.forEach(m => { byCat[m.category] = m })
+    const h = new Date().getHours()
+    let order
+    if (h < 11) order = ['Breakfast', 'Lunch', 'Snack', 'Dinner']
+    else if (h < 15) order = ['Lunch', 'Snack', 'Dinner', 'Breakfast']
+    else if (h < 21) order = ['Dinner', 'Snack', 'Lunch', 'Breakfast']
+    else order = ['Snack', 'Dinner', 'Lunch', 'Breakfast']
+    // Prefer the time-appropriate meal that isn't cooked yet; if it's done,
+    // still feature it (shows as done) rather than jumping to an odd meal.
+    for (const cat of order) {
+      const m = byCat[cat]
+      if (m && !isPrepDone(todayIdx, cat)) return m
+    }
+    // Everything in-order is cooked — return the time-appropriate one anyway,
+    // or null if truly nothing planned.
+    for (const cat of order) { if (byCat[cat]) return m0(byCat[cat]) }
+    return null
+    function m0(x) { return x }
+  }, [planned, todayIdx, isPrepDone])
+
+  const allDone = totalCount > 0 && doneCount === totalCount
+  // Feature the time-appropriate meal; if it's cooked, fall back to any
+  // remaining uncooked meal so the hero only turns into the celebration when
+  // EVERYTHING is done.
+  const nextUp = useMemo(() => {
+    if (allDone) return null
+    if (featured && !isPrepDone(todayIdx, featured.category)) return featured
+    return planned.find(m => !isPrepDone(todayIdx, m.category)) || null
+  }, [featured, allDone, planned, todayIdx, isPrepDone])
   const caloriesSoFar = planned
     .filter(m => isPrepDone(todayIdx, m.category))
     .reduce((s, m) => s + (getMealFacts(m.meal, servings).calories || 0), 0)
@@ -169,7 +205,7 @@ export default function TodayPage() {
               const col = CAT_COLOR[category]
               return (
                 <div key={category} className="card flex items-center gap-3 p-2.5" style={{ opacity: done ? 0.62 : 1, transition: 'opacity 0.2s' }}>
-                  <button onClick={() => togglePrep(todayIdx, category)}
+                  <button onClick={() => { if (!done) successHaptic(); else tapHaptic(); togglePrep(todayIdx, category) }}
                     aria-label={done ? 'Mark not cooked' : 'Mark cooked'}
                     className="flex items-center justify-center tap-target shrink-0 transition-all active:scale-90"
                     style={{ width: 28, height: 28, borderRadius: 8, border: `2px solid ${done ? 'var(--accent)' : 'var(--border-2)'}`, background: done ? 'var(--accent)' : 'transparent' }}>
@@ -192,20 +228,6 @@ export default function TodayPage() {
                 </div>
               )
             })}
-          </div>
-
-          {/* Quick actions */}
-          <div className="flex gap-2.5">
-            {[
-              { icon: ShoppingCart, label: 'Grocery', to: '/grocery' },
-              { icon: CalendarDays, label: 'Full week', to: '/planner' },
-              { icon: Sparkles, label: 'Regenerate', to: '/planner' },
-            ].map(({ icon: Icon, label, to }) => (
-              <button key={label} onClick={() => navigate(to)} className="card flex-1 flex flex-col items-center gap-1.5 py-3 tap-target transition-all active:scale-95">
-                <Icon size={18} style={{ color: 'var(--text-2)' }} />
-                <span className="font-display font-semibold" style={{ fontSize: 12.5, color: 'var(--text)' }}>{label}</span>
-              </button>
-            ))}
           </div>
         </>
       )}
@@ -264,10 +286,10 @@ function StreakSheet({ streak, weekDays, onClose }) {
                 <div className="flex items-center justify-center" style={{
                   width: 36, height: 36, borderRadius: 11, fontSize: 15,
                   background: d.cooked ? 'var(--accent)' : frozen ? 'rgba(124,156,181,0.15)' : 'var(--surface-2)',
-                  border: `1px solid ${d.cooked ? 'var(--accent)' : frozen ? '#7C9CB5' : 'var(--border)'}`,
+                  border: `1px solid ${d.cooked ? 'var(--accent)' : frozen ? '#8A94A6' : 'var(--border)'}`,
                   opacity: d.isFuture ? 0.4 : 1,
                 }}>
-                  {d.cooked ? <Check size={15} strokeWidth={2.6} style={{ color: '#1A1C16' }} /> : frozen ? <Snowflake size={14} style={{ color: '#7C9CB5' }} /> : ''}
+                  {d.cooked ? <Check size={15} strokeWidth={2.6} style={{ color: '#1A1C16' }} /> : frozen ? <Snowflake size={14} style={{ color: '#8A94A6' }} /> : ''}
                 </div>
                 <p style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 4 }}>{d.label}</p>
               </div>
@@ -277,7 +299,7 @@ function StreakSheet({ streak, weekDays, onClose }) {
 
         {/* Freeze explainer */}
         <div className="card flex items-center gap-3 p-3 mb-2.5" style={{ boxShadow: 'none', background: 'var(--surface-2)' }}>
-          <Snowflake size={20} style={{ color: '#7C9CB5', flexShrink: 0 }} />
+          <Snowflake size={20} style={{ color: '#8A94A6', flexShrink: 0 }} />
           <div>
             <p className="font-display font-semibold" style={{ fontSize: 13.5, color: 'var(--text)' }}>Busy days are covered</p>
             <p style={{ fontSize: 11.5, color: 'var(--text-3)', lineHeight: 1.4 }}>

@@ -7,13 +7,13 @@ import {
   Check, ChevronRight, Flame, Plus, Leaf, Clock, DollarSign,
 } from 'lucide-react'
 
-// Per-category visual identity. Uses the app's existing token palette so it
-// stays on-brand in both light and dark themes.
+// Per-category visual identity. Stays within the app's charcoal + lime palette
+// for consistency in both light and dark themes.
 const CAT_STYLES = {
-  Breakfast: { accent: '#D9A12E', tint: 'rgba(217,161,46,0.14)',  icon: '🍳' },
+  Breakfast: { accent: 'var(--accent)', tint: 'var(--accent-light)', icon: '🍳' },
   Lunch:     { accent: 'var(--accent)', tint: 'var(--accent-light)', icon: '🥗' },
-  Dinner:    { accent: 'var(--brand)', tint: 'var(--brand-light)',  icon: '🍝' },
-  Snack:     { accent: '#7A8C5A', tint: 'rgba(122,140,90,0.14)',   icon: '🍎' },
+  Dinner:    { accent: 'var(--brand)',  tint: 'var(--brand-light)',  icon: '🍝' },
+  Snack:     { accent: 'var(--brand)',  tint: 'var(--surface-2)',    icon: '🍎' },
 }
 
 /**
@@ -139,8 +139,8 @@ export default function MealCard({
           className={`flex items-center justify-center rounded-lg transition-all tap-target ${justChecked ? 'check-pop' : ''}`}
           style={{
             width: 32, height: 32,
-            background: prepped ? 'var(--success-light)' : 'transparent',
-            color: prepped ? 'var(--success)' : 'var(--text-3)',
+            background: prepped ? 'var(--accent-light)' : 'transparent',
+            color: prepped ? 'var(--accent-text)' : 'var(--text-3)',
           }}
           onMouseEnter={e => { if (!prepped) e.currentTarget.style.background = 'var(--surface-2)' }}
           onMouseLeave={e => { if (!prepped) e.currentTarget.style.background = 'transparent' }}

@@ -7,22 +7,16 @@ import { CATEGORIES } from '../lib/mealLogic'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { getTodayIndex } from '../lib/weekDates'
 import { computeStreak, currentWeekDays, recordCookedToday } from '../lib/streak'
-import { successHaptic, tapHaptic } from '../lib/haptics'
 import RecipeDetailModal from '../components/RecipeDetailModal'
+import CookMode from '../components/CookMode'
+import MealRow from '../components/ui/MealRow'
+import SectionLabel from '../components/ui/SectionLabel'
+import ProgressRing from '../components/ui/ProgressRing'
+import { useCountUp } from '../hooks/useCountUp'
 import {
   Flame, Clock, Sparkles, CalendarDays,
-  Check, ChefHat, Snowflake, Trophy, PartyPopper,
+  Snowflake, Trophy, PartyPopper, Check, BookOpen,
 } from 'lucide-react'
-
-const CAT_ICONS = { Breakfast: '🍳', Lunch: '🥗', Dinner: '🍝', Snack: '🍎' }
-// Keep category accents within the app palette (charcoal + lime) for
-// consistency — differentiate by icon/tint depth, not clashing hues.
-const CAT_COLOR = {
-  Breakfast: { edge: 'var(--accent)',    tint: 'var(--accent-light)' },
-  Lunch:     { edge: 'var(--accent)',    tint: 'var(--accent-light)' },
-  Dinner:    { edge: 'var(--brand)',     tint: 'var(--surface-3)' },
-  Snack:     { edge: 'var(--brand)',     tint: 'var(--surface-2)' },
-}
 
 function greeting() {
   const h = new Date().getHours()
@@ -34,7 +28,7 @@ function greeting() {
 export default function TodayPage() {
   const navigate = useNavigate()
   const { profile } = useAuth()
-  const { weeklyPlan, servings, isPrepDone, togglePrep } = usePlanStore()
+  const { weeklyPlan, servings, isPrepDone, togglePrep, removeDessert } = usePlanStore()
   const { meals: allMeals, toggleFavorite } = useMeals()
 
   const todayIdx = useMemo(() => { const t = getTodayIndex(); return t >= 0 ? t : 0 }, [])
@@ -58,6 +52,14 @@ export default function TodayPage() {
   const planned = todayMeals.filter(m => m.meal)
   const doneCount = planned.filter(m => isPrepDone(todayIdx, m.category)).length
   const totalCount = planned.length
+
+  // Optional dessert lives under the 'Dessert' key (outside CATEGORIES).
+  const todayDessert = useMemo(() => {
+    const d = weeklyPlan?.[todayIdx]?.Dessert
+    if (!d) return null
+    const live = (allMeals || []).find(m => m.id === d.id)
+    return live ? { ...live, ...d } : d
+  }, [weeklyPlan, todayIdx, allMeals])
 
   // Pick the meal to feature based on time of day, falling back sensibly.
   // Morning → Breakfast, midday → Lunch, evening → Dinner; Snack is a filler.
@@ -95,6 +97,10 @@ export default function TodayPage() {
   const caloriesSoFar = planned
     .filter(m => isPrepDone(todayIdx, m.category))
     .reduce((s, m) => s + (getMealFacts(m.meal, servings).calories || 0), 0)
+    + (todayDessert && isPrepDone(todayIdx, 'Dessert') ? (getMealFacts(todayDessert, servings).calories || 0) : 0)
+  const totalCals = planned.reduce((s, m) => s + (getMealFacts(m.meal, servings).calories || 0), 0)
+    + (todayDessert ? (getMealFacts(todayDessert, servings).calories || 0) : 0)
+  const animatedCals = useCountUp(caloriesSoFar)
 
   // Recompute streak whenever prep changes: if any meal is done today, today counts.
   useEffect(() => {
@@ -107,12 +113,10 @@ export default function TodayPage() {
   const name = profile?.full_name?.split(' ')[0] || ''
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
 
+  const [cookMeal, setCookMeal] = useState(null)
   function handleStartCooking(meal) {
-    // Open the recipe; Cook Mode can hook in here later.
-    setViewMeal({ meal, dayIdx: todayIdx, category: nextUp?.category })
+    setCookMeal(meal)
   }
-
-  const circumference = 2 * Math.PI * 17
 
   return (
     <div className="max-w-2xl mx-auto px-4 pb-28 pt-4 sm:pt-6">
@@ -146,96 +150,112 @@ export default function TodayPage() {
         <>
           {/* Up-next hero, or all-done celebration */}
           {nextUp ? (
-            <div className="rounded-[18px] p-4 mb-3.5" style={{ background: '#1A1C16', boxShadow: 'var(--shadow-lg)', border: '1px solid #2A2D24' }}>
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#9BD531' }}>
+            <div className="rounded-[20px] p-4 mb-3.5" style={{ background: '#1A1C16', boxShadow: 'var(--shadow-lg)', border: '1px solid #2A2D24', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', top: -30, right: -30, width: 120, height: 120, borderRadius: '50%', background: 'rgba(124,181,24,0.08)' }} />
+              <div className="flex items-center justify-between" style={{ position: 'relative' }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9BD531' }}>
                   Up next · {nextUp.category}
                 </span>
-                {getMealFacts(nextUp.meal, servings).prepTime != null && (
-                  <span className="flex items-center gap-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-                    <Clock size={11} /> {formatPrepTime(getMealFacts(nextUp.meal, servings).prepTime)}
-                  </span>
-                )}
+                <div className="flex items-center gap-2.5">
+                  {getMealFacts(nextUp.meal, servings).prepTime != null && (
+                    <span className="flex items-center gap-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                      <Clock size={12} /> {formatPrepTime(getMealFacts(nextUp.meal, servings).prepTime)}
+                    </span>
+                  )}
+                  {getMealFacts(nextUp.meal, servings).calories != null && (
+                    <span className="flex items-center gap-1" style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                      <Flame size={12} /> {getMealFacts(nextUp.meal, servings).calories}
+                    </span>
+                  )}
+                </div>
               </div>
-              <p className="font-display font-bold" style={{ fontSize: 21, letterSpacing: '-0.02em', color: '#fff', margin: '6px 0 14px' }}>
+              <p className="font-display font-bold" style={{ fontSize: 22, letterSpacing: '-0.02em', color: '#fff', margin: '7px 0 15px', position: 'relative' }}>
                 {nextUp.meal.item_name}
               </p>
-              <div className="flex gap-2.5">
+              <div className="flex gap-2.5" style={{ position: 'relative' }}>
                 <button onClick={() => handleStartCooking(nextUp.meal)}
-                  className="flex-1 flex items-center justify-center gap-2 tap-target font-display font-bold transition-all active:scale-[0.98]"
-                  style={{ background: '#9BD531', color: '#1A1C16', fontSize: 14, padding: 11, borderRadius: 12 }}>
-                  <ChefHat size={16} /> Start cooking
+                  className="flex items-center justify-center gap-2 tap-target font-display font-bold transition-all active:scale-[0.98]"
+                  style={{ flex: 1.4, background: '#9BD531', color: '#1A1C16', fontSize: 14, padding: 12, borderRadius: 13 }}>
+                  <Flame size={17} /> Cook now
                 </button>
                 <button onClick={() => setViewMeal({ meal: nextUp.meal, dayIdx: todayIdx, category: nextUp.category })}
-                  className="tap-target font-display font-semibold"
-                  style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', fontSize: 14, padding: '11px 16px', borderRadius: 12 }}>
-                  Recipe
+                  className="flex items-center justify-center gap-2 tap-target font-display font-semibold transition-all active:scale-[0.98]"
+                  style={{ flex: 1, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: 14, padding: 12, borderRadius: 13, border: '1px solid rgba(255,255,255,0.12)' }}>
+                  <BookOpen size={16} /> Recipe
                 </button>
               </div>
             </div>
           ) : (
-            <div className="rounded-[18px] p-5 mb-3.5 text-center" style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)' }}>
-              <PartyPopper size={34} style={{ color: 'var(--accent-text)', margin: '0 auto' }} />
-              <p className="font-display font-bold" style={{ fontSize: 18, color: 'var(--accent-text)', marginTop: 6 }}>All done for today!</p>
+            <div className="rounded-[20px] p-5 mb-3.5 text-center" style={{ background: 'var(--accent-light)', border: '1px solid var(--accent)' }}>
+              <PartyPopper size={36} style={{ color: 'var(--accent-text)', margin: '0 auto' }} />
+              <p className="font-display font-bold" style={{ fontSize: 19, color: 'var(--accent-text)', marginTop: 6 }}>All done for today!</p>
               <p style={{ fontSize: 13, color: 'var(--accent-text)', marginTop: 3 }}>You cooked everything you planned. Nice work.</p>
             </div>
           )}
 
-          {/* Progress ring */}
-          <div className="card p-3 mb-4 flex items-center gap-3">
-            <div style={{ position: 'relative', width: 42, height: 42, flexShrink: 0 }}>
-              <svg width="42" height="42" style={{ transform: 'rotate(-90deg)' }}>
-                <circle cx="21" cy="21" r="17" fill="none" stroke="var(--surface-2)" strokeWidth="4" />
-                <circle cx="21" cy="21" r="17" fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round"
-                  strokeDasharray={circumference} strokeDashoffset={circumference * (1 - (totalCount ? doneCount / totalCount : 0))}
-                  style={{ transition: 'stroke-dashoffset 0.5s cubic-bezier(0.22,1,0.36,1)' }} />
-              </svg>
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <span className="nums font-display font-bold" style={{ fontSize: 12, color: 'var(--text)' }}>{doneCount}/{totalCount}</span>
-              </div>
+          {/* Progress card */}
+          <div className="card mb-4 flex items-center gap-3" style={{ padding: '13px 15px' }}>
+            <ProgressRing value={doneCount} max={totalCount || 1} size={48} stroke={5}
+              label={`${doneCount}/${totalCount}`} labelColor="var(--text)" />
+            <div className="flex-1">
+              <p className="font-display font-bold" style={{ fontSize: 15, color: 'var(--text)' }}>Today's progress</p>
+              <p className="nums" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                {animatedCals.toLocaleString()} of {totalCals.toLocaleString()} cal
+              </p>
             </div>
-            <div>
-              <p className="font-display font-bold" style={{ fontSize: 14, color: 'var(--text)' }}>Meals done</p>
-              <p className="nums" style={{ fontSize: 11, color: 'var(--text-3)' }}>{caloriesSoFar.toLocaleString()} cal so far</p>
+            <div className="font-display" style={{ fontSize: 20, fontWeight: 800, color: allDone ? 'var(--accent)' : 'var(--text)' }}>
+              {Math.round((doneCount / (totalCount || 1)) * 100)}%
             </div>
           </div>
 
           {/* Today's meals */}
-          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)', margin: '0 4px 9px' }}>
-            Today's meals
-          </p>
-          <div className="flex flex-col gap-2 mb-4">
-            {planned.map(({ category, meal }) => {
-              const done = isPrepDone(todayIdx, category)
-              const facts = getMealFacts(meal, servings)
-              const col = CAT_COLOR[category]
-              return (
-                <div key={category} className="card flex items-center gap-3 p-2.5" style={{ opacity: done ? 0.62 : 1, transition: 'opacity 0.2s' }}>
-                  <button onClick={() => { if (!done) successHaptic(); else tapHaptic(); togglePrep(todayIdx, category) }}
-                    aria-label={done ? 'Mark not cooked' : 'Mark cooked'}
-                    className="flex items-center justify-center tap-target shrink-0 transition-all active:scale-90"
-                    style={{ width: 28, height: 28, borderRadius: 8, border: `2px solid ${done ? 'var(--accent)' : 'var(--border-2)'}`, background: done ? 'var(--accent)' : 'transparent' }}>
-                    {done && <Check size={15} strokeWidth={2.6} style={{ color: '#1A1C16' }} />}
-                  </button>
-                  <button onClick={() => setViewMeal({ meal, dayIdx: todayIdx, category })} className="flex items-center gap-3 flex-1 min-w-0 text-left">
-                    <div className="flex items-center justify-center shrink-0" style={{ width: 34, height: 34, borderRadius: 9, background: col.tint, fontSize: 16 }}>
-                      {CAT_ICONS[category]}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{category}</p>
-                      <p className="font-display font-semibold truncate" style={{ fontSize: 14, color: 'var(--text)', textDecoration: done ? 'line-through' : 'none' }}>
-                        {meal.item_name}
-                      </p>
-                    </div>
-                    {facts.calories != null && (
-                      <span className="nums shrink-0" style={{ fontSize: 11, color: 'var(--text-3)' }}>{facts.calories}</span>
-                    )}
-                  </button>
-                </div>
-              )
-            })}
+          <SectionLabel>Today's meals</SectionLabel>
+          <div className="flex flex-col gap-2 mb-2">
+            {planned.filter(m => m.category !== 'Dessert').map(({ category, meal }) => (
+              <MealRow
+                key={category}
+                meal={meal}
+                category={category}
+                servings={servings}
+                prepped={isPrepDone(todayIdx, category)}
+                onTogglePrep={() => togglePrep(todayIdx, category)}
+                onView={(m) => setViewMeal({ meal: m, dayIdx: todayIdx, category })}
+              />
+            ))}
           </div>
+
+          {/* Dessert — optional add-on */}
+          {todayDessert ? (
+            <MealRow
+              meal={todayDessert}
+              category="Dessert"
+              servings={servings}
+              prepped={isPrepDone(todayIdx, 'Dessert')}
+              onTogglePrep={() => togglePrep(todayIdx, 'Dessert')}
+              onView={(m) => setViewMeal({ meal: m, dayIdx: todayIdx, category: 'Dessert' })}
+              onRemove={() => removeDessert(todayIdx)}
+              accent
+            />
+          ) : (
+            <button onClick={() => navigate('/planner')}
+              className="w-full flex items-center justify-center gap-2 tap-target transition-all active:scale-[0.98] mb-4"
+              style={{ padding: 12, borderRadius: 'var(--radius-sm)', border: '1.5px dashed var(--border-2)', background: 'transparent', color: 'var(--text-2)', fontSize: 13.5, fontWeight: 600 }}>
+              🍰 Want dessert?
+            </button>
+          )}
         </>
+      )}
+
+      {cookMeal && (
+        <CookMode
+          meal={cookMeal}
+          onClose={() => setCookMeal(null)}
+          onDone={() => {
+            // Mark the featured meal's slot as cooked when they finish.
+            const slot = nextUp?.category || planned.find(p => p.meal?.id === cookMeal.id)?.category
+            if (slot && !isPrepDone(todayIdx, slot)) togglePrep(todayIdx, slot)
+          }}
+        />
       )}
 
       {showStreak && <StreakSheet streak={streak} weekDays={weekDays} onClose={() => setShowStreak(false)} />}

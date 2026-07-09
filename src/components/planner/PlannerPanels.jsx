@@ -2,69 +2,78 @@ import { buildGroceryList } from '../../lib/mealLogic'
 import { groupGroceryByCategory } from '../../lib/groceryCategories'
 import { weeklyTimeTotal, formatPrepTime } from '../../lib/mealFacts'
 import { weeklyBudgetTotal, formatCost } from '../../lib/budget'
+import { weeklyNutritionTotals } from '../../lib/nutrition'
 import {
-  ShoppingCart, ArrowLeftRight, Wand2, Receipt, Clock, DollarSign,
+  ShoppingCart, ArrowLeftRight, Wand2, Receipt, Clock, DollarSign, Flame,
   FileDown, Printer, Link as LinkIcon, Users, Undo2, ChevronRight, Bookmark,
 } from 'lucide-react'
 
-// ── Week overview: headline time/cost + stat tiles + prep progress ──
+// ── Week overview: headline time/cost + macros + prep progress ──
 export function WeekOverview({ stats, prepProgress, perDay, weeklyPlan, servings = 1 }) {
   const time = weeklyTimeTotal(weeklyPlan)
   const budget = weeklyBudgetTotal(weeklyPlan, servings)
   const timeLabel = time.mealsWithTime > 0 ? formatPrepTime(time.totalMinutes) : null
+  const { totals } = weeklyNutritionTotals(weeklyPlan, servings)
 
-  const tiles = [
-    { val: stats?.count ?? 0, label: 'Meals planned' },
-    { val: perDay?.calories ? perDay.calories.toLocaleString() : '—', label: 'Avg cal / day' },
-    { val: stats?.ingredients ?? 0, label: 'Ingredients' },
-    { val: `${prepProgress.done}/${prepProgress.total}`, label: 'Prepped', accent: true },
+  const headline = [
+    { icon: Clock,      label: 'Cooking time', val: timeLabel || '—' },
+    { icon: DollarSign, label: 'Est. cost',    val: budget.total > 0 ? formatCost(budget.total) : '—', sub: budget.total > 0 ? `~${formatCost(budget.perDay)}/day` : null },
+    { icon: Flame,      label: 'Avg cal / day', val: perDay?.calories ? perDay.calories.toLocaleString() : '—' },
   ]
+
+  const macros = [
+    { label: 'Protein', val: Math.round(totals.protein_g || 0), color: 'var(--accent-text)' },
+    { label: 'Carbs',   val: Math.round(totals.carbs_g || 0),   color: 'var(--text)' },
+    { label: 'Fat',     val: Math.round(totals.fat_g || 0),     color: 'var(--text)' },
+    { label: 'Fiber',   val: Math.round(totals.fiber_g || 0),   color: 'var(--text)' },
+  ]
+
   return (
     <div>
-      {/* Headline: total cooking time + total cost for the week */}
-      <div className="grid grid-cols-2 gap-1.5" style={{ marginBottom: 6 }}>
-        <div className="rounded-xl" style={{ background: 'var(--brand-light)', padding: '11px 12px' }}>
-          <div className="flex items-center gap-1.5" style={{ color: 'var(--brand-text)', marginBottom: 4 }}>
-            <Clock size={13} /><span style={{ fontSize: 10.5, fontWeight: 600 }}>Cooking time</span>
-          </div>
-          <div className="nums" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1, color: 'var(--text)' }}>
-            {timeLabel || '—'}
-          </div>
-          {time.totalMeals > 0 && time.mealsWithTime < time.totalMeals && (
-            <div style={{ fontSize: 9.5, color: 'var(--text-3)', marginTop: 3 }}>
-              {time.mealsWithTime}/{time.totalMeals} meals timed
+      {/* Headline stats for the whole week */}
+      <div className="grid grid-cols-3 gap-1.5" style={{ marginBottom: 8 }}>
+        {headline.map((h, i) => {
+          const Icon = h.icon
+          return (
+            <div key={i} className="rounded-xl" style={{ background: 'var(--brand-light)', padding: '10px 11px' }}>
+              <div className="flex items-center gap-1" style={{ color: 'var(--brand-text)', marginBottom: 4 }}>
+                <Icon size={12} /><span style={{ fontSize: 9.5, fontWeight: 600 }}>{h.label}</span>
+              </div>
+              <div className="nums" style={{ fontSize: 16, fontWeight: 700, lineHeight: 1, color: 'var(--text)' }}>{h.val}</div>
+              {h.sub && <div style={{ fontSize: 9, color: 'var(--text-3)', marginTop: 3 }}>{h.sub}</div>}
             </div>
-          )}
-        </div>
-        <div className="rounded-xl" style={{ background: 'var(--brand-light)', padding: '11px 12px' }}>
-          <div className="flex items-center gap-1.5" style={{ color: 'var(--brand-text)', marginBottom: 4 }}>
-            <DollarSign size={13} /><span style={{ fontSize: 10.5, fontWeight: 600 }}>Est. cost</span>
-          </div>
-          <div className="nums" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1, color: 'var(--text)' }}>
-            {budget.total > 0 ? formatCost(budget.total) : '—'}
-          </div>
-          <div style={{ fontSize: 9.5, color: 'var(--text-3)', marginTop: 3 }}>
-            ~{formatCost(budget.perDay)}/day · {servings} {servings === 1 ? 'person' : 'people'}
-          </div>
-        </div>
+          )
+        })}
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5">
-        {tiles.map((t, i) => (
-          <div key={i} className="rounded-xl" style={{ background: 'var(--surface-2)', padding: '10px 11px' }}>
-            <div className="nums" style={{ fontSize: 19, fontWeight: 700, lineHeight: 1, color: t.accent ? 'var(--success)' : 'var(--text)' }}>
-              {t.val}
-            </div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-3)', marginTop: 3 }}>{t.label}</div>
+      {/* Whole-week macros */}
+      <div className="rounded-xl flex" style={{ background: 'var(--surface-2)', padding: '11px 4px', marginBottom: 8 }}>
+        {macros.map((m, i) => (
+          <div key={m.label} className="flex-1 text-center" style={{ borderLeft: i === 0 ? 'none' : '1px solid var(--border)' }}>
+            <div className="nums font-display" style={{ fontSize: 16, fontWeight: 700, color: m.color }}>{m.val}<span style={{ fontSize: 10, color: 'var(--text-3)' }}>g</span></div>
+            <div style={{ fontSize: 9, color: 'var(--text-3)', marginTop: 1 }}>{m.label}</div>
           </div>
         ))}
       </div>
+
+      {/* Meals + ingredients + prep */}
+      <div className="grid grid-cols-2 gap-1.5">
+        <div className="rounded-xl" style={{ background: 'var(--surface-2)', padding: '10px 11px' }}>
+          <div className="nums" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1, color: 'var(--text)' }}>{stats?.count ?? 0}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>Meals planned</div>
+        </div>
+        <div className="rounded-xl" style={{ background: 'var(--surface-2)', padding: '10px 11px' }}>
+          <div className="nums" style={{ fontSize: 18, fontWeight: 700, lineHeight: 1, color: 'var(--accent-text)' }}>{prepProgress.done}/{prepProgress.total}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-3)', marginTop: 3 }}>Prepped</div>
+        </div>
+      </div>
+
       <div style={{ marginTop: 12 }}>
         <div className="flex justify-between" style={{ fontSize: 11, color: 'var(--text-3)', marginBottom: 5 }}>
           <span>Prep progress</span><span className="nums">{prepProgress.pct}%</span>
         </div>
-        <div style={{ height: 4, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', borderRadius: 99, background: 'var(--success)', width: `${prepProgress.pct}%`, transition: 'width 0.4s cubic-bezier(0.22,1,0.36,1)' }} />
+        <div style={{ height: 5, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+          <div style={{ height: '100%', borderRadius: 99, background: 'var(--accent)', width: `${prepProgress.pct}%`, transition: 'width 0.5s cubic-bezier(0.22,1,0.36,1)' }} />
         </div>
       </div>
     </div>

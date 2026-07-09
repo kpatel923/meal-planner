@@ -429,6 +429,8 @@
 @keyframes backdropIn   { from { opacity:0 } to { opacity:1 } }
 @keyframes sheetUp      { from { transform:translateY(100%) } to { transform:translateY(0) } }
 @keyframes checkPop     { 0% { transform:scale(1) } 40% { transform:scale(1.28) } 100% { transform:scale(1) } }
+@keyframes checkPopIn   { 0% { transform:scale(0); opacity:0 } 65% { transform:scale(1.35) } 100% { transform:scale(1); opacity:1 } }
+@keyframes countUp      { from { opacity:0.4 } to { opacity:1 } }
 @keyframes pipFill      { from { transform:scale(0) } to { transform:scale(1) } }
 
 .day-content-in { animation: dayContentIn 0.28s cubic-bezier(0.22,1,0.36,1) both; }

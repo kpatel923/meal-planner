@@ -128,6 +128,45 @@ export async function generateRecipeTagline(mealName, ingredients) {
 // description). For media it returns SEARCH links (YouTube/Google) rather than
 // fabricated direct URLs — an LLM can't verify a real video/photo exists, so we
 // never invent one. Everything is editable; the user reviews before saving.
+// ── Cook Mode step generation ─────────────────────────────────────────
+// Turns a recipe into clean numbered steps with optional per-step timers.
+// Uses stored detail_notes/ingredients as context. Cached by the caller.
+export async function generateCookSteps(meal) {
+  const name = meal?.item_name || 'this dish'
+  const ingredients = meal?.ingredients || ''
+  const notes = meal?.detail_notes || ''
+
+  const prompt = `You are a cooking guide. Break "${name}" into clear, ordered cooking steps for a home cook.
+Ingredients: ${ingredients}
+${notes ? `Notes: ${notes}` : ''}
+
+Respond with JSON ONLY (no markdown):
+{"steps":[{"text":"what to do in this step, 1-2 sentences","timerSeconds": <seconds if this step involves waiting/cooking/baking, else null>}]}
+
+Rules:
+- 4 to 8 steps. Concrete and practical.
+- Add timerSeconds ONLY for steps with real waiting (boiling, baking, simmering, resting). Use null otherwise.
+- Keep each step short enough to read at a glance while cooking.`
+
+  const raw = await callAI(prompt, 700)
+  let parsed
+  try {
+    parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
+  } catch {
+    // Fallback: split detail_notes into sentence steps if AI parse fails.
+    const sentences = (notes || `Prepare ${name} using: ${ingredients}`)
+      .split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean)
+    return sentences.slice(0, 8).map(text => ({ text, timerSeconds: null }))
+  }
+  if (!parsed.steps || !parsed.steps.length) {
+    return [{ text: `Prepare ${name} using: ${ingredients}`, timerSeconds: null }]
+  }
+  return parsed.steps.map(s => ({
+    text: s.text || '',
+    timerSeconds: Number.isFinite(s.timerSeconds) ? s.timerSeconds : null,
+  })).filter(s => s.text)
+}
+
 export async function generateRecipeFromName(name) {
   if (!name || !name.trim()) throw new Error('Enter a meal name first')
   const dish = name.trim()

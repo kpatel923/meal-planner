@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
     )
 
     const reqType = reqBody.type || 'weekly-plan'
-    const PERSONALIZED = new Set(['cook-dinner', 'did-you-cook', 'weekly-recap'])
+    const PERSONALIZED = new Set(['cook-breakfast', 'cook-lunch', 'cook-dinner', 'cook-snack', 'did-you-cook', 'weekly-recap'])
     const isPersonal = PERSONALIZED.has(reqType)
 
     const CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
@@ -72,11 +72,23 @@ Deno.serve(async (req) => {
     function personalize(type: string, plan: any, prep: any, timezone?: string): { title: string; body: string; url: string; tag: string } | null {
       const todayIdx = serverDayIndex(timezone)   // 0=Mon..6=Sun in user's zone
       const day = plan?.[todayIdx] || plan?.[String(todayIdx)]
-      if (type === 'cook-dinner') {
-        const dinner = day?.Dinner
-        if (!dinner || !dinner.item_name) return null   // nothing planned → skip
-        return { title: 'Dinner time 👩‍🍳', body: `Tonight: ${dinner.item_name}. Tap to see the recipe.`, url: '/planner', tag: 'cook-dinner' }
+
+      // Per-meal cook reminders: cook-breakfast / cook-lunch / cook-dinner / cook-snack
+      const cookMatch = type.match(/^cook-(breakfast|lunch|dinner|snack)$/)
+      if (cookMatch) {
+        const slot = cookMatch[1].charAt(0).toUpperCase() + cookMatch[1].slice(1)  // "Dinner"
+        const meal = day?.[slot]
+        if (!meal || !meal.item_name) return null   // nothing planned → skip
+        const COPY: Record<string, { title: string; lead: string }> = {
+          Breakfast: { title: 'Breakfast time ☀️', lead: 'This morning' },
+          Lunch:     { title: 'Lunch time 🥗',     lead: 'For lunch' },
+          Dinner:    { title: 'Dinner time 👩‍🍳',  lead: 'Tonight' },
+          Snack:     { title: 'Snack time 🍎',      lead: 'Your snack' },
+        }
+        const c = COPY[slot]
+        return { title: c.title, body: `${c.lead}: ${meal.item_name}. Tap to see the recipe.`, url: '/planner', tag: type }
       }
+
       if (type === 'did-you-cook') {
         const dinner = day?.Dinner
         if (!dinner || !dinner.item_name) return null

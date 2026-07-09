@@ -354,6 +354,10 @@ export default function PlannerPage() {
     return { minutes, hasTime, cost }
   }, [mergedPlan, activeDay, servings])
 
+  // Swipe-between-days state (must be before any early return).
+  const swipeRef = useRef({ x: null, y: null })
+  const [swipeAnim, setSwipeAnim] = useState('')
+
   // ── Loading skeleton ──────────────────────────────────────────────
   if (mealsLoading) {
     return (
@@ -368,8 +372,6 @@ export default function PlannerPage() {
   const dayMeals = mergedPlan?.[activeDay] || {}
 
   // Swipe left/right on the day section to move between days.
-  const swipeRef = useRef({ x: null, y: null })
-  const [swipeAnim, setSwipeAnim] = useState('')
   function onDayTouchStart(e) {
     swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
   }

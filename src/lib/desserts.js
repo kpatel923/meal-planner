@@ -9,12 +9,15 @@ const DESSERT_HINTS = [
   'sundae', 'churro', 'flan', 'caramel', 'toffee', 'marshmallow',
 ]
 
-// Find likely desserts already in the user's library.
+// Find likely desserts already in the user's library. Prefers the real
+// 'Dessert' category; falls back to keyword detection for older recipes that
+// predate the category.
 export function findLibraryDesserts(meals) {
   if (!meals?.length) return []
+  const byCategory = meals.filter(m => m.category === 'Dessert')
+  if (byCategory.length) return byCategory
   return meals.filter(m => {
-    const text = `${m.item_name || ''} ${m.category || ''}`.toLowerCase()
-    if (m.category === 'Dessert') return true
+    const text = `${m.item_name || ''}`.toLowerCase()
     return DESSERT_HINTS.some(h => text.includes(h))
   })
 }

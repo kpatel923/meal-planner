@@ -492,3 +492,7 @@
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
 .print-only { display: none; }
+
+/* Day swipe transitions (planner) */
+@keyframes daySlideL { from { opacity:0; transform:translateX(24px) } to { opacity:1; transform:translateX(0) } }
+@keyframes daySlideR { from { opacity:0; transform:translateX(-24px) } to { opacity:1; transform:translateX(0) } }

@@ -16,6 +16,7 @@ import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { optimizeForMacros } from '../lib/macroOptimizer'
 import { SEED_RECIPES } from '../lib/seedRecipes'
 import { recommendDesserts, aiDessertToMeal } from '../lib/desserts'
+import { SEED_DESSERTS } from '../lib/seedDesserts'
 import { formatCost } from '../lib/budget'
 import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
 import RecipeDetailModal from '../components/RecipeDetailModal'
@@ -140,6 +141,17 @@ export default function PlannerPage() {
     setDessert(dessertPickerDay, meal)
     setDessertPickerDay(null)
     toast.success('Dessert added 🍰')
+  }
+
+  async function handleSeedDesserts() {
+    setDessertAiLoading(true)
+    try {
+      await bulkAddMeals(SEED_DESSERTS.map(r => ({ ...r, source: 'manual' })))
+      toast.success('Added a starter set of desserts 🍰')
+    } catch {
+      toast.error('Could not add desserts')
+    }
+    setDessertAiLoading(false)
   }
 
   async function handleAiDessert() {
@@ -310,6 +322,13 @@ export default function PlannerPage() {
           calories:         meal.calories         ?? live.calories,
           cost_per_serving: meal.cost_per_serving ?? live.cost_per_serving,
           photo_url:        meal.photo_url        ?? live.photo_url,
+          video_url:        meal.video_url        ?? live.video_url,
+          written_url:      meal.written_url      ?? live.written_url,
+          detail_notes:     meal.detail_notes     ?? live.detail_notes,
+          protein_g:        meal.protein_g        ?? live.protein_g,
+          carbs_g:          meal.carbs_g          ?? live.carbs_g,
+          fat_g:            meal.fat_g            ?? live.fat_g,
+          fiber_g:          meal.fiber_g          ?? live.fiber_g,
         } : meal
       }
     }
@@ -347,6 +366,25 @@ export default function PlannerPage() {
   }
 
   const dayMeals = mergedPlan?.[activeDay] || {}
+
+  // Swipe left/right on the day section to move between days.
+  const swipeRef = useRef({ x: null, y: null })
+  const [swipeAnim, setSwipeAnim] = useState('')
+  function onDayTouchStart(e) {
+    swipeRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+  function onDayTouchEnd(e) {
+    const s = swipeRef.current
+    if (s.x == null) return
+    const dx = e.changedTouches[0].clientX - s.x
+    const dy = e.changedTouches[0].clientY - s.y
+    swipeRef.current = { x: null, y: null }
+    // Horizontal, decisive, not a vertical scroll.
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0 && activeDay < 6) { setSwipeAnim('slideLeft'); setActiveDay(activeDay + 1) }
+      else if (dx > 0 && activeDay > 0) { setSwipeAnim('slideRight'); setActiveDay(activeDay - 1) }
+    }
+  }
   const dayPlanned = CATEGORIES.filter(c => dayMeals[c])
   const isToday = activeDay === todayIdx
 
@@ -511,7 +549,11 @@ export default function PlannerPage() {
                   regenerating={regenDay === activeDay}
                 />
               ) : (
-                <div className="flex flex-col gap-2.5">
+                <div className="flex flex-col gap-2.5"
+                  key={activeDay}
+                  onTouchStart={onDayTouchStart}
+                  onTouchEnd={onDayTouchEnd}
+                  style={{ animation: swipeAnim === 'slideLeft' ? 'daySlideL 0.28s ease' : swipeAnim === 'slideRight' ? 'daySlideR 0.28s ease' : undefined }}>
                   {CATEGORIES.map((cat, i) => (
                     <MealCard
                       key={cat}
@@ -832,9 +874,16 @@ export default function PlannerPage() {
                 const suggestions = recommendDesserts(allMeals, 4)
                 if (!suggestions.length) {
                   return (
-                    <p style={{ fontSize: 13, color: 'var(--text-3)', padding: '8px 0 16px', lineHeight: 1.5 }}>
-                      No desserts found in your library yet — try the AI suggestion below, or add dessert recipes on the Recipes page.
-                    </p>
+                    <div style={{ padding: '4px 0 14px' }}>
+                      <p style={{ fontSize: 13, color: 'var(--text-3)', lineHeight: 1.5, marginBottom: 12 }}>
+                        No desserts in your library yet. Add a starter set of simple desserts, or let AI suggest one.
+                      </p>
+                      <button onClick={handleSeedDesserts} disabled={dessertAiLoading}
+                        className="btn-primary btn w-full tap-target gap-2 mb-2">
+                        {dessertAiLoading ? <Loader2 size={16} className="animate-[spin_1s_linear_infinite]" /> : <Plus size={16} />}
+                        Add 18 starter desserts
+                      </button>
+                    </div>
                   )
                 }
                 return (

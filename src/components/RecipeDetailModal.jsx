@@ -19,7 +19,7 @@ export const SOURCE_BADGES = {
   import: { label: 'Imported', icon: null, bg: 'rgba(217,137,46,0.12)', text: '#D9892E' },
 }
 
-export const CAT_ICONS = { Breakfast: '🍳', Lunch: '🥗', Dinner: '🍝', Snack: '🍎' }
+export const CAT_ICONS = { Breakfast: '🍳', Lunch: '🥗', Dinner: '🍝', Snack: '🍎', Dessert: '🍰' }
 
 export function getVideoMeta(url) {
   if (!url) return null
@@ -178,33 +178,40 @@ export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onT
             </div>
           )}
 
-          {/* Links */}
-          {(meal.video_url || meal.written_url) && (
+          {/* Links — saved media, plus search fallbacks so there's always a way */}
+          <div>
+            <p className="font-semibold mb-2.5" style={{ fontSize: '13px', color: 'var(--text-2)' }}>WATCH &amp; READ</p>
             <div className="flex flex-col sm:flex-row gap-3">
-              {meal.video_url && videoMeta && (
+              {meal.video_url && videoMeta ? (
                 <a href={meal.video_url} target="_blank" rel="noopener noreferrer"
                   className="flex-1 flex items-center justify-center gap-2.5 rounded-2xl transition-transform duration-150 active:scale-[0.97] tap-target"
                   style={{ padding: '14px 20px', background: videoMeta.color, color: '#fff', fontSize: '15px', fontWeight: 600 }}>
                   {videoMeta.icon} {videoMeta.label}
                 </a>
+              ) : (
+                <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(meal.item_name + ' recipe')}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2.5 rounded-2xl transition-transform duration-150 active:scale-[0.97] tap-target"
+                  style={{ padding: '14px 20px', background: 'var(--surface-2)', color: 'var(--text)', fontSize: '15px', fontWeight: 600 }}>
+                  <Play size={16} style={{ color: '#FF0000' }} /> Find a video
+                </a>
               )}
-              {meal.written_url && (
+              {meal.written_url ? (
                 <a href={meal.written_url} target="_blank" rel="noopener noreferrer"
                   className="flex-1 flex items-center justify-center gap-2.5 rounded-2xl transition-transform duration-150 active:scale-[0.97] tap-target"
                   style={{ padding: '14px 20px', background: 'var(--surface-2)', color: 'var(--text)', fontSize: '15px', fontWeight: 600 }}>
-                  <FileText size={16} /> Read Recipe
+                  <FileText size={16} /> Read recipe
+                </a>
+              ) : (
+                <a href={`https://www.google.com/search?q=${encodeURIComponent(meal.item_name + ' recipe')}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2.5 rounded-2xl transition-transform duration-150 active:scale-[0.97] tap-target"
+                  style={{ padding: '14px 20px', background: 'var(--surface-2)', color: 'var(--text)', fontSize: '15px', fontWeight: 600 }}>
+                  <FileText size={16} /> Find recipe
                 </a>
               )}
             </div>
-          )}
-
-          {!meal.video_url && !meal.written_url && !meal.detail_notes && (
-            <div className="rounded-2xl py-5 text-center" style={{ background: 'var(--surface-2)' }}>
-              <p style={{ fontSize: '13.5px', color: 'var(--text-3)' }}>
-                No recipe link or notes saved yet.
-              </p>
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Planner actions — only when opened from the planner */}

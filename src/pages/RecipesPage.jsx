@@ -329,7 +329,7 @@ export default function RecipesPage() {
         <select className="input sm:w-48" style={{ color:'var(--text)' }}
           value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="">All categories</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{CAT_ICONS[c]} {c}</option>)}
+          {[...CATEGORIES, 'Dessert'].map(c => <option key={c} value={c}>{CAT_ICONS[c]} {c}</option>)}
         </select>
         <div className="flex gap-2 flex-wrap">
           {DIET_OPTIONS.map(d => {
@@ -631,7 +631,7 @@ export default function RecipesPage() {
                 <div>
                   <label className="input-label">Category *</label>
                   <select className="input" value={form.category} onChange={e => setField('category', e.target.value)}>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{CAT_ICONS[c]} {c}</option>)}
+                    {[...CATEGORIES, 'Dessert'].map(c => <option key={c} value={c}>{CAT_ICONS[c]} {c}</option>)}
                   </select>
                 </div>
                 <div>

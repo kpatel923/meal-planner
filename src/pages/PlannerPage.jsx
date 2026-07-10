@@ -5,7 +5,6 @@ import { usePlans } from '../hooks/usePlans'
 import { useAuth } from '../hooks/useAuth'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { DAYS, CATEGORIES, makeEatingOutMeal, isEatingOut } from '../lib/mealLogic'
-import { exportToPDF } from '../lib/pdfExport'
 import {
   buildPlanShareText, buildGroceryShareText, buildShareableURL, shareText,
 } from '../lib/sharing'
@@ -24,13 +23,13 @@ import DayStrip from '../components/planner/DayStrip'
 import MealRow from '../components/ui/MealRow'
 import MobileSheet from '../components/planner/MobileSheet'
 import {
-  WeekOverview, GroceryPreview, AIPrompts, QuickActions, PanelSection,
+  WeekOverview, PanelSection,
 } from '../components/planner/PlannerPanels'
 import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
   CalendarPlus, RefreshCw, BarChart3, Plus,
-  ShoppingCart, MoreHorizontal, Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, Home,
+  Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, Home, ChevronDown,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -57,9 +56,9 @@ export default function PlannerPage() {
     generate, regenerateDay, undoRegenerateDay, swapMeal, reorderMeal, undoSwap, clearUndo,
     setDessert, removeDessert,
     undoGenerate, clearUndoGenerate, applyOptimizedPlan,
-    clearPlan, togglePrep, isPrepDone, prepProgress,
+    clearPlan, togglePrep, isPrepDone, prepProgress, loadPlan: storeLoadPlan,
   } = usePlanStore()
-  const { savePlan, plans } = usePlans()
+  const { savePlan, plans, loadPlan: deserializePlanRow } = usePlans()
 
   // ── Local UI state ────────────────────────────────────────────────
   const [activeDay,      setActiveDay]      = useState(() => {
@@ -105,6 +104,12 @@ export default function PlannerPage() {
 
   function toggleDiet(key) {
     setDietTypes(prev => prev.includes(key) ? prev.filter(d => d !== key) : [...prev, key])
+  }
+
+  const [showGenMenu, setShowGenMenu] = useState(false)
+  function handleLoadPlan(plan) {
+    storeLoadPlan(deserializePlanRow(plan))
+    toast.success(`Loaded "${plan.name || 'saved plan'}"`)
   }
 
   async function handleGenerate() {
@@ -420,21 +425,34 @@ export default function PlannerPage() {
                 </p>
               )}
 
-              {weeklyPlan && (
-                <button onClick={() => handleShare('plan')}
-                  className="flex items-center justify-center rounded-xl tap-target"
-                  style={{ width: 36, height: 36, border: '1px solid var(--border-2)', color: 'var(--text-2)' }}
-                  title="Share">
-                  <Share2 size={16} />
+              <div style={{ position: 'relative' }}>
+                <button onClick={() => plans?.length > 0 ? setShowGenMenu(v => !v) : handleGenerate()}
+                  disabled={generating || !dietTypes.length}
+                  className="btn-primary btn tap-target gap-2" style={{ height: 36 }}>
+                  {generating
+                    ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
+                    : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span>{plans?.length > 0 && <ChevronDown size={13} />}</>}
                 </button>
-              )}
-
-              <button onClick={handleGenerate} disabled={generating || !dietTypes.length}
-                className="btn-primary btn tap-target gap-2" style={{ height: 36 }}>
-                {generating
-                  ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
-                  : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span></>}
-              </button>
+                {showGenMenu && plans?.length > 0 && (
+                  <>
+                    <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowGenMenu(false)} />
+                    <div className="card" style={{ position: 'absolute', top: 42, right: 0, zIndex: 41, width: 230, padding: 6, boxShadow: 'var(--shadow-lg)' }}>
+                      <button onClick={() => { setShowGenMenu(false); handleGenerate() }}
+                        className="w-full flex items-center gap-2.5 tap-target text-left" style={{ padding: '10px 12px', borderRadius: 12, fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
+                        <Wand2 size={15} style={{ color: 'var(--accent-dark)' }} /> {weeklyPlan ? 'Generate new week' : 'Generate a new plan'}
+                      </button>
+                      <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)' }}>Load a saved plan</div>
+                      {plans.slice(0, 5).map(p => (
+                        <button key={p.id} onClick={() => { setShowGenMenu(false); handleLoadPlan(p) }}
+                          className="w-full flex items-center gap-2.5 tap-target text-left" style={{ padding: '9px 12px', borderRadius: 12, fontSize: 13, color: 'var(--text-2)' }}>
+                          <Bookmark size={14} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+                          <span className="truncate">{p.name || 'Saved plan'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
 
               {weeklyPlan && (
                 <button onClick={() => setShowTune(true)}
@@ -645,88 +663,25 @@ export default function PlannerPage() {
           <PanelSection title="Week overview">
             <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
           </PanelSection>
-          <PanelSection title="Grocery list" link="Open full" onLink={() => navigate('/grocery')}>
-            <GroceryPreview weeklyPlan={weeklyPlan} onOpenFull={() => navigate('/grocery')} />
-          </PanelSection>
-          <PanelSection title="AI chef" link="Open" onLink={() => navigate('/ai')}>
-            <AIPrompts
-              onSwapSuggest={() => navigate('/ai')}
-              onRegenerate={handleGenerate}
-              onWhatCanIMake={() => navigate('/ai')}
-            />
-          </PanelSection>
-          <PanelSection title="Quick actions">
-            <QuickActions
-              onPDF={() => exportToPDF(weeklyPlan, profile?.username, servings)}
-              onPrint={() => window.print()}
-              onCopyLink={() => handleShare('plan')}
-              onShareHousehold={() => navigate('/household')}
-              onUndoGenerate={undoGenerate}
-              canUndo={!!prevPlanSnapshot}
-              onLoadSaved={() => navigate('/saved')}
-              hasSavedPlans={plans?.length > 0}
-            />
-          </PanelSection>
         </aside>
       )}
 
-      {/* ════════ MOBILE: slim stat strip + sheet triggers ════════ */}
+      {/* ════════ MOBILE: slim stat strip ════════ */}
       {weeklyPlan && (
         <div className="lg:hidden stat-strip" style={{ padding: '8px 12px' }}>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setMobileSheet('overview')}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-xl tap-target"
-              style={{ height: 38, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 12 }}>
-              <BarChart3 size={14} />
-              <span className="nums">{prepProgress.done}/{prepProgress.total} prepped</span>
-            </button>
-            <button onClick={() => setMobileSheet('grocery')}
-              className="flex items-center justify-center rounded-xl tap-target"
-              style={{ width: 44, height: 38, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
-              aria-label="Grocery list">
-              <ShoppingCart size={16} />
-            </button>
-            <button onClick={() => setMobileSheet('ai')}
-              className="flex items-center justify-center rounded-xl tap-target"
-              style={{ width: 44, height: 38, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
-              aria-label="AI chef">
-              <Sparkles size={16} />
-            </button>
-            <button onClick={() => setMobileSheet('actions')}
-              className="flex items-center justify-center rounded-xl tap-target"
-              style={{ width: 44, height: 38, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)' }}
-              aria-label="More actions">
-              <MoreHorizontal size={16} />
-            </button>
-          </div>
+          <button onClick={() => setMobileSheet('overview')}
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl tap-target"
+            style={{ height: 38, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 12 }}>
+            <BarChart3 size={14} />
+            <span className="nums">{prepProgress.done}/{prepProgress.total} prepped</span>
+            <span style={{ color: 'var(--text-3)' }}>· Week overview</span>
+          </button>
         </div>
       )}
 
       {/* ── Mobile sheets ── */}
       <MobileSheet open={mobileSheet === 'overview'} onClose={() => setMobileSheet(null)} title="Week overview">
         <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
-      </MobileSheet>
-      <MobileSheet open={mobileSheet === 'grocery'} onClose={() => setMobileSheet(null)} title="Grocery list">
-        <GroceryPreview weeklyPlan={weeklyPlan} onOpenFull={() => { setMobileSheet(null); navigate('/grocery') }} />
-      </MobileSheet>
-      <MobileSheet open={mobileSheet === 'ai'} onClose={() => setMobileSheet(null)} title="AI chef">
-        <AIPrompts
-          onSwapSuggest={() => { setMobileSheet(null); navigate('/ai') }}
-          onRegenerate={() => { setMobileSheet(null); handleGenerate() }}
-          onWhatCanIMake={() => { setMobileSheet(null); navigate('/ai') }}
-        />
-      </MobileSheet>
-      <MobileSheet open={mobileSheet === 'actions'} onClose={() => setMobileSheet(null)} title="Quick actions">
-        <QuickActions
-          onPDF={() => { setMobileSheet(null); exportToPDF(weeklyPlan, profile?.username, servings) }}
-          onPrint={() => { setMobileSheet(null); window.print() }}
-          onCopyLink={() => { setMobileSheet(null); handleShare('plan') }}
-          onShareHousehold={() => { setMobileSheet(null); navigate('/household') }}
-          onUndoGenerate={() => { setMobileSheet(null); undoGenerate() }}
-          canUndo={!!prevPlanSnapshot}
-          onLoadSaved={() => { setMobileSheet(null); navigate('/saved') }}
-          hasSavedPlans={plans?.length > 0}
-        />
       </MobileSheet>
 
       {/* ════════ Undo toasts ════════ */}

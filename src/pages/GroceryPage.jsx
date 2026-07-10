@@ -9,6 +9,7 @@ import { buildGroceryShareText, shareText } from '../lib/sharing'
 import { saveForOffline, loadOfflineData, saveOfflineChecked, isOnline } from '../lib/offline'
 import { tapHaptic } from '../lib/haptics'
 import PageHeader from '../components/planner/PageHeader'
+import EmptyState from '../components/ui/EmptyState'
 import {
   ShoppingCart, CheckCircle2, Square,
   Info, Sparkles, ArrowRight, Share2, ChevronDown,
@@ -179,20 +180,13 @@ export default function GroceryPage() {
     <div className="page-container" style={{ animation: 'fadeIn 0.35s ease' }}>
       <PageHeader eyebrow="Grocery List" title="What to buy"
         subtitle="Generate a plan first, or load a saved one below." />
-      <div className="flex flex-col items-center text-center rounded-2xl mb-5 mt-4"
-        style={{ padding: '48px 24px', border: '1px dashed var(--border-2)', animation: 'slideUp 0.4s ease' }}>
-        <div className="flex items-center justify-center rounded-2xl mb-5"
-          style={{ width: 64, height: 64, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-          <ShoppingCart size={28} style={{ color: 'var(--text-3)' }} />
-        </div>
-        <h3 className="font-display font-semibold mb-2" style={{ fontSize: 19, color: 'var(--text)' }}>No active plan</h3>
-        <p style={{ color: 'var(--text-3)', fontSize: 14, marginBottom: 20, maxWidth: 300, lineHeight: 1.5 }}>
-          Head to the Planner, generate your week, then come back for your full grocery list.
-        </p>
-        <button onClick={() => navigate('/planner')} className="btn-primary btn gap-2">
-          <Sparkles size={16} /> Go to Planner <ArrowRight size={15} />
-        </button>
-      </div>
+      <EmptyState
+        emoji="🛒"
+        title="No active plan yet"
+        message="Head to the Planner, generate your week, then come back for your full grocery list."
+        action={() => navigate('/planner')}
+        actionLabel={<><Sparkles size={16} /> Go to Planner <ArrowRight size={15} /></>}
+      />
       {plans.length > 0 && (
         <div className="card p-5">
           <p className="font-semibold mb-4" style={{ fontSize: 15, color: 'var(--text)' }}>Or load a saved plan</p>

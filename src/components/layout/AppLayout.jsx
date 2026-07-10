@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
 import Onboarding from '../Onboarding'
@@ -41,6 +41,7 @@ export default function AppLayout() {
   const showOnboarding = profile && profile.onboarding_done === false && !dismissedOnboarding
   const { isDark, toggle } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
 
   function handleOnboardingComplete() {
     try { localStorage.setItem(ONBOARDING_DISMISS_KEY, 'true') } catch {}
@@ -142,7 +143,9 @@ export default function AppLayout() {
 
       {/* ── Main content ─────────────────────────────────────── */}
       <main className="flex-1 min-w-0 pb-28 lg:pb-0 safe-top" style={{ overflowX: 'hidden' }}>
-        <Outlet />
+        <div key={location.pathname} style={{ animation: 'pageIn 0.32s cubic-bezier(0.22,1,0.36,1)' }}>
+          <Outlet />
+        </div>
       </main>
 
       {/* ── Mobile bottom nav ────────────────────────────────── */}

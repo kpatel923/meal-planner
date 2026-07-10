@@ -556,17 +556,18 @@ export default function PlannerPage() {
                   onTouchStart={onDayTouchStart}
                   onTouchEnd={onDayTouchEnd}
                   style={{ animation: swipeAnim === 'slideLeft' ? 'daySlideL 0.28s ease' : swipeAnim === 'slideRight' ? 'daySlideR 0.28s ease' : undefined }}>
-                  {CATEGORIES.map((cat) => (
+                  {CATEGORIES.map((cat, i) => (
                     dayMeals[cat] ? (
-                      <MealRow
-                        key={cat}
-                        meal={dayMeals[cat]}
-                        category={cat}
-                        servings={servings}
-                        prepped={isPrepDone(activeDay, cat)}
-                        onTogglePrep={() => togglePrep(activeDay, cat)}
-                        onView={(m) => setViewMeal({ meal: m, dayIdx: activeDay, category: cat })}
-                      />
+                      <div key={cat} style={{ animation: `cardStagger 0.4s cubic-bezier(0.22,1,0.36,1) ${i * 55}ms both` }}>
+                        <MealRow
+                          meal={dayMeals[cat]}
+                          category={cat}
+                          servings={servings}
+                          prepped={isPrepDone(activeDay, cat)}
+                          onTogglePrep={() => togglePrep(activeDay, cat)}
+                          onView={(m) => setViewMeal({ meal: m, dayIdx: activeDay, category: cat })}
+                        />
+                      </div>
                     ) : (
                       <button key={cat} onClick={() => openSwap(activeDay, cat)}
                         className="flex items-center gap-3.5 tap-target transition-all active:scale-[0.99]"

@@ -211,16 +211,17 @@ export default function TodayPage() {
           {/* Today's meals */}
           <SectionLabel>Today's meals</SectionLabel>
           <div className="flex flex-col gap-2 mb-2">
-            {planned.filter(m => m.category !== 'Dessert').map(({ category, meal }) => (
-              <MealRow
-                key={category}
-                meal={meal}
-                category={category}
-                servings={servings}
-                prepped={isPrepDone(todayIdx, category)}
-                onTogglePrep={() => togglePrep(todayIdx, category)}
-                onView={(m) => setViewMeal({ meal: m, dayIdx: todayIdx, category })}
-              />
+            {planned.filter(m => m.category !== 'Dessert').map(({ category, meal }, i) => (
+              <div key={category} style={{ animation: `cardStagger 0.4s cubic-bezier(0.22,1,0.36,1) ${i * 55}ms both` }}>
+                <MealRow
+                  meal={meal}
+                  category={category}
+                  servings={servings}
+                  prepped={isPrepDone(todayIdx, category)}
+                  onTogglePrep={() => togglePrep(todayIdx, category)}
+                  onView={(m) => setViewMeal({ meal: m, dayIdx: todayIdx, category })}
+                />
+              </div>
             ))}
           </div>
 

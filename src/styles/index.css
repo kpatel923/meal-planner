@@ -501,3 +501,18 @@
 /* Day swipe transitions (planner) */
 @keyframes daySlideL { from { opacity:0; transform:translateX(24px) } to { opacity:1; transform:translateX(0) } }
 @keyframes daySlideR { from { opacity:0; transform:translateX(-24px) } to { opacity:1; transform:translateX(0) } }
+
+/* Page/route transition */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Staggered list item entrance */
+@keyframes cardStagger {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes pageIn { from { opacity: 1; } to { opacity: 1; } }
+  @keyframes cardStagger { from { opacity: 1; } to { opacity: 1; } }
+}

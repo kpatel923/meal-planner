@@ -13,18 +13,18 @@ export default function PageHeader({ eyebrow, title, subtitle, actions, sticky =
       } : undefined}
     >
       <div className="flex items-start justify-between gap-4 flex-wrap"
-        style={{ padding: sticky ? '16px 0 14px' : '0 0 8px' }}>
+        style={{ padding: sticky ? '16px 0 14px' : '0 0 10px' }}>
         <div className="min-w-0">
           {eyebrow && (
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--brand)' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--accent-dark)' }}>
               {eyebrow}
             </span>
           )}
-          <h1 className="font-display font-semibold" style={{ fontSize: 22, letterSpacing: '-0.03em', color: 'var(--text)', marginTop: eyebrow ? 2 : 0 }}>
+          <h1 className="font-display font-bold" style={{ fontSize: 26, letterSpacing: '-0.03em', color: 'var(--text)', marginTop: eyebrow ? 3 : 0 }}>
             {title}
           </h1>
           {subtitle && (
-            <p style={{ fontSize: 13.5, color: 'var(--text-3)', marginTop: 4, lineHeight: 1.5 }}>{subtitle}</p>
+            <p style={{ fontSize: 13.5, color: 'var(--text-3)', marginTop: 5, lineHeight: 1.5 }}>{subtitle}</p>
           )}
         </div>
         {actions && <div className="flex items-center gap-2 flex-wrap shrink-0 no-print">{actions}</div>}

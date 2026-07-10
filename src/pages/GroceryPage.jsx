@@ -347,7 +347,7 @@ export default function GroceryPage() {
                 return (
                   <div key={ing}
                     className="w-full flex items-start gap-3.5 px-4 py-3 transition-all group"
-                    style={{ borderTop: '1px solid var(--border)', background: done ? 'var(--brand-light)' : 'transparent' }}
+                    style={{ borderTop: '1px solid var(--hairline)', background: done ? 'var(--brand-light)' : 'transparent' }}
                     onMouseEnter={e => { if (!done) e.currentTarget.style.background = 'var(--surface-2)' }}
                     onMouseLeave={e => { e.currentTarget.style.background = done ? 'var(--brand-light)' : 'transparent' }}>
                     <button onClick={() => toggle(ing)} className="flex-1 flex items-start gap-3.5 text-left tap-target min-w-0">

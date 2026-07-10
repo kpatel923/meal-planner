@@ -11,6 +11,8 @@
     --surface-3:  #E4E7DE;
     --border:     #E4E7DE;
     --hairline:   #ECEEE8;
+    --bg-top:     #FBFCFA;
+    --glow:       rgba(124,181,24,0.06);
     --border-2:   #D3D7CA;
     --text:       #16170F;
     --text-2:     #5E6155;
@@ -56,6 +58,8 @@
     --surface-3:  #282D25;
     --border:     #2D322A;
     --hairline:   #262B22;
+    --bg-top:     #12160F;
+    --glow:       rgba(124,181,24,0.05);
     --border-2:   #3A4035;
     --text:       #F3F5F0;
     --text-2:     #A7AC9F;
@@ -109,6 +113,10 @@
     @apply font-body antialiased;
     font-size: 15px;
     background: var(--bg);
+    background-image:
+      radial-gradient(120% 55% at 50% -8%, var(--glow, rgba(124,181,24,0.06)) 0%, transparent 60%),
+      linear-gradient(180deg, var(--bg-top, #FBFCFA) 0%, var(--bg) 42%);
+    background-attachment: fixed;
     color: var(--text);
     min-height: 100dvh;
     transition: background 0.25s ease, color 0.25s ease;

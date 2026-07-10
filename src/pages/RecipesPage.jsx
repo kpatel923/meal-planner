@@ -8,7 +8,7 @@ import { nutritionColor } from '../lib/nutrition'
 import { getBudgetTag, BUDGET_TAG_STYLES, formatCost } from '../lib/budget'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
 import { SEED_RECIPES } from '../lib/seedRecipes'
-import { parseRecipeFromURL, analyzeMealPhoto, generateRecipeFromName } from '../lib/aiFeatures'
+import { parseRecipeFromURL, analyzeMealPhoto, generateRecipeFromName, searchRecipeImage } from '../lib/aiFeatures'
 import { fileToCompressedDataURL } from '../lib/imageUtils'
 import RecipeDetailModal, { DIET_COLORS, SOURCE_BADGES, CAT_ICONS, getVideoMeta } from '../components/RecipeDetailModal'
 import {
@@ -16,7 +16,7 @@ import {
   Loader2, X, BookOpen, AlertTriangle, ChevronDown,
   Play, Camera, FileText,
   Sparkles, Clock, ImagePlus, Wand2, Flame, Heart,
-  DollarSign, Trash
+  DollarSign, Trash, List, LayoutGrid
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -29,6 +29,7 @@ export default function RecipesPage() {
   const [catFilter,    setCatFilter]    = useState('')
   const [dietFilter,   setDietFilter]   = useState([])
   const [favsOnly,     setFavsOnly]     = useState(false)
+  const [viewMode,     setViewMode]     = useState('grid') // 'grid' | 'compact'
   const [seeding,      setSeeding]      = useState(false)
   const [analyzingPhoto, setAnalyzingPhoto] = useState(false)
   const [showForm,     setShowForm]     = useState(false)
@@ -110,6 +111,8 @@ export default function RecipesPage() {
     const toastId = toast.loading('Generating recipe…')
     try {
       const r = await generateRecipeFromName(name)
+      // Fetch a real food photo in parallel (best-effort; never blocks).
+      const photoPromise = form.photo_url ? Promise.resolve(null) : searchRecipeImage(r.name || name)
       setForm(p => ({
         ...p,
         item_name:    r.name || p.item_name,
@@ -122,7 +125,13 @@ export default function RecipesPage() {
         video_url:    p.video_url   || r.videoSearchUrl   || '',
         written_url:  p.written_url || r.writtenSearchUrl || '',
       }))
-      toast.success(`Filled in! (${r.confidence} confidence — review before saving)`, { id: toastId })
+      const photo = await photoPromise
+      if (photo) {
+        setForm(p => ({ ...p, photo_url: p.photo_url || photo }))
+        toast.success(`Filled in with a photo! (${r.confidence} confidence — review before saving)`, { id: toastId })
+      } else {
+        toast.success(`Filled in! (${r.confidence} confidence — review before saving)`, { id: toastId })
+      }
     } catch (e) {
       toast.error(e.message || 'Could not generate recipe', { id: toastId, duration: 5000 })
     }
@@ -254,8 +263,9 @@ export default function RecipesPage() {
   }
 
   const visibleMeals = favsOnly ? meals.filter(m => m.is_favorite) : meals
-  const grouped = CATEGORIES.reduce((acc, cat) => ({ ...acc, [cat]: visibleMeals.filter(m => m.category === cat) }), {})
-  const showCats = catFilter ? [catFilter] : CATEGORIES
+  const grouped = [...CATEGORIES, 'Dessert'].reduce((acc, cat) => ({ ...acc, [cat]: visibleMeals.filter(m => m.category === cat) }), {})
+  const ALL_CATS = [...CATEGORIES, 'Dessert']
+  const showCats = catFilter ? [catFilter] : ALL_CATS
 
   return (
     <div className="page-container" style={{ animation:'fadeIn 0.35s ease' }}>
@@ -349,6 +359,12 @@ export default function RecipesPage() {
             style={{ fontSize:'13.5px', background: favsOnly ? 'var(--danger-light)' : 'var(--surface-2)', color: favsOnly ? 'var(--danger)' : 'var(--text-2)' }}>
             <Heart size={13} fill={favsOnly ? 'var(--danger)' : 'none'} /> Favorites
           </button>
+          <button onClick={() => setViewMode(v => v === 'grid' ? 'compact' : 'grid')}
+            aria-label={viewMode === 'grid' ? 'Switch to compact list' : 'Switch to grid'}
+            className="rounded-full transition-all active:scale-95 tap-target flex items-center justify-center"
+            style={{ width: 42, height: 42, background: 'var(--surface-2)', color: 'var(--text-2)' }}>
+            {viewMode === 'grid' ? <List size={17} /> : <LayoutGrid size={17} />}
+          </button>
         </div>
       </div>
 
@@ -400,7 +416,7 @@ export default function RecipesPage() {
                   </span>
                 </div>
 
-                <div className="recipe-grid">
+                <div className={viewMode === 'compact' ? 'flex flex-col gap-2' : 'recipe-grid'}>
                   {catMeals.map(meal => {
                     const dc = DIET_COLORS[meal.diet_type] || DIET_COLORS.veg
                     const hasVideo = !!meal.video_url
@@ -412,6 +428,32 @@ export default function RecipesPage() {
                     const prepLabel = formatPrepTime(facts.prepTime)
                     const budgetTag = meal.budget_tag || (cost != null ? getBudgetTag(cost) : null)
                     const budgetStyle = budgetTag ? BUDGET_TAG_STYLES[budgetTag] : null
+
+                    // ── Compact row ──
+                    if (viewMode === 'compact') {
+                      return (
+                        <button key={meal.id} onClick={() => setViewMeal(meal)}
+                          className="card flex items-center gap-3 text-left w-full" style={{ padding: '9px 12px' }}>
+                          {meal.photo_url ? (
+                            <div style={{ width: 44, height: 44, borderRadius: 11, overflow: 'hidden', flexShrink: 0 }}>
+                              <img src={meal.photo_url} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center shrink-0" style={{ width: 44, height: 44, borderRadius: 11, background: 'var(--accent-light)', fontSize: 19 }}>
+                              {CAT_ICONS[meal.category] || '🍽️'}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-display font-semibold truncate" style={{ fontSize: 14.5, color: 'var(--text)' }}>{meal.item_name}</p>
+                            <p className="truncate" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                              {[prepLabel, nutrition?.calories ? `${nutrition.calories} cal` : null].filter(Boolean).join(' · ') || meal.ingredients?.split(',').slice(0,3).join(', ')}
+                            </p>
+                          </div>
+                          {meal.is_favorite && <Heart size={14} fill="var(--danger)" style={{ color: 'var(--danger)', flexShrink: 0 }} />}
+                          <span className="badge shrink-0" style={{ background: dc.bg, color: dc.text }}>{DIET_LABELS[meal.diet_type]?.label}</span>
+                        </button>
+                      )
+                    }
 
                     return (
                       <button key={meal.id} onClick={() => setViewMeal(meal)}

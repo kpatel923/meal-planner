@@ -77,23 +77,35 @@ export default function RecipeDetailModal({ meal, onClose, onEdit, onDelete, onT
   return (
     <div className="modal-backdrop" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal-panel" style={swipe.style} {...swipe.handlers}>
-        {/* Drag handle (mobile swipe-to-close affordance) */}
-        <div className="sm:hidden flex justify-center pt-2.5 pb-1" style={{ position: 'relative', zIndex: 2 }}>
-          <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--border-2)' }} />
-        </div>
-        {/* Photo */}
-        {meal.photo_url && (
-          <div style={{ height: '240px', overflow: 'hidden' }}>
+        {/* Photo header with overlaid controls (or a clean header when no photo) */}
+        {meal.photo_url ? (
+          <div style={{ position: 'relative', height: 220, overflow: 'hidden', borderTopLeftRadius: 'inherit', borderTopRightRadius: 'inherit' }}>
             <img src={meal.photo_url} alt="" className="w-full h-full object-cover" />
+            {/* Gradient scrim so overlaid controls stay legible */}
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.28) 0%, transparent 28%, transparent 62%, rgba(0,0,0,0.35) 100%)' }} />
+            {/* Drag handle floats on top of the photo (mobile) */}
+            <div className="sm:hidden" style={{ position: 'absolute', top: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
+              <div style={{ width: 40, height: 4, borderRadius: 99, background: 'rgba(255,255,255,0.7)' }} />
+            </div>
+            <button onClick={onClose} aria-label="Close"
+              className="tap-target" style={{ position: 'absolute', top: 12, right: 12, width: 34, height: 34, borderRadius: '50%', background: 'rgba(0,0,0,0.4)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(6px)' }}>
+              <X size={18} />
+            </button>
+          </div>
+        ) : (
+          <div className="sm:hidden flex justify-center pt-2.5 pb-1" style={{ position: 'relative', zIndex: 2 }}>
+            <div style={{ width: 40, height: 4, borderRadius: 99, background: 'var(--border-2)' }} />
           </div>
         )}
 
         {/* Header */}
         <div className="relative p-6 sm:p-8" style={{ borderBottom: '1px solid var(--border)' }}>
-          <button onClick={onClose} className="btn-ghost btn-icon absolute top-5 right-5 tap-target"
-            style={{ background: 'var(--surface-2)' }}>
-            <X size={18} />
-          </button>
+          {!meal.photo_url && (
+            <button onClick={onClose} className="btn-ghost btn-icon absolute top-5 right-5 tap-target"
+              style={{ background: 'var(--surface-2)' }}>
+              <X size={18} />
+            </button>
+          )}
 
           <div className="flex items-center gap-2 mb-4 flex-wrap pr-12">
             <span className="badge" style={{ background: dc.bg, color: dc.text }}>

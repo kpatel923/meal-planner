@@ -1,8 +1,19 @@
 import Papa from 'papaparse'
 
 const REQUIRED_FIELDS = ['item_name', 'category', 'ingredients', 'diet_type']
-const VALID_CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
+const VALID_CATEGORIES = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert']
 const VALID_DIET_TYPES  = ['veg', 'vegan', 'nonveg']
+
+// Every recipe field we round-trip through export/import. Keeping this list in
+// one place means export and import stay in sync — nothing silently dropped.
+const OPTIONAL_STRING_FIELDS = [
+  'notes', 'detail_notes', 'video_url', 'written_url', 'photo_url', 'image_url',
+  'source', 'budget_tag',
+]
+const OPTIONAL_NUMBER_FIELDS = [
+  'prep_time', 'calories', 'protein_g', 'carbs_g', 'fat_g', 'fiber_g',
+  'cost_per_serving', 'leftover_days', 'rating',
+]
 
 // ─────────────────────────────────────────
 // EXPORT
@@ -112,13 +123,23 @@ function validateRows(rows) {
     if (rowErrors.length > 0) {
       errors.push(...rowErrors)
     } else {
-      valid.push({
+      const clean = {
         item_name:   String(row.item_name).trim(),
         category:    String(row.category).trim(),
         ingredients: String(row.ingredients).trim(),
         diet_type:   String(row.diet_type).trim(),
-        notes:       row.notes ? String(row.notes).trim() : null,
-      })
+      }
+      // Carry every optional detail so an import fully restores a recipe.
+      for (const f of OPTIONAL_STRING_FIELDS) {
+        if (row[f] != null && String(row[f]).trim() !== '') clean[f] = String(row[f]).trim()
+      }
+      for (const f of OPTIONAL_NUMBER_FIELDS) {
+        if (row[f] != null && String(row[f]).trim() !== '') {
+          const n = Number(row[f])
+          if (Number.isFinite(n)) clean[f] = n
+        }
+      }
+      valid.push(clean)
     }
   })
 

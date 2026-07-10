@@ -167,6 +167,22 @@ Rules:
   })).filter(s => s.text)
 }
 
+// Fetch a real, relevant food photo for a dish via the image-search function
+// (Pexels, server-side). Returns a URL string or null. Never throws —
+// a missing photo should never block adding a recipe.
+export async function searchRecipeImage(query) {
+  if (!query || !query.trim()) return null
+  try {
+    const { data, error } = await supabase.functions.invoke('image-search', {
+      body: { query: query.trim() },
+    })
+    if (error) return null
+    return data?.url || null
+  } catch {
+    return null
+  }
+}
+
 export async function generateRecipeFromName(name) {
   if (!name || !name.trim()) throw new Error('Enter a meal name first')
   const dish = name.trim()

@@ -19,9 +19,9 @@ import { recommendDesserts, aiDessertToMeal } from '../lib/desserts'
 import { SEED_DESSERTS } from '../lib/seedDesserts'
 import { formatCost } from '../lib/budget'
 import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
-import RecipeDetailModal from '../components/RecipeDetailModal'
+import RecipeDetailModal, { CAT_ICONS } from '../components/RecipeDetailModal'
 import DayStrip from '../components/planner/DayStrip'
-import MealCard from '../components/planner/MealCard'
+import MealRow from '../components/ui/MealRow'
 import MobileSheet from '../components/planner/MobileSheet'
 import {
   WeekOverview, GroceryPreview, AIPrompts, QuickActions, PanelSection,
@@ -556,35 +556,51 @@ export default function PlannerPage() {
                   onTouchStart={onDayTouchStart}
                   onTouchEnd={onDayTouchEnd}
                   style={{ animation: swipeAnim === 'slideLeft' ? 'daySlideL 0.28s ease' : swipeAnim === 'slideRight' ? 'daySlideR 0.28s ease' : undefined }}>
-                  {CATEGORIES.map((cat, i) => (
-                    <MealCard
-                      key={cat}
-                      meal={dayMeals[cat] || null}
-                      category={cat}
-                      prepped={isPrepDone(activeDay, cat)}
-                      onTogglePrep={() => togglePrep(activeDay, cat)}
-                      onView={(m) => setViewMeal({ meal: m, dayIdx: activeDay, category: cat })}
-                      onAdd={() => openSwap(activeDay, cat)}
-                      animDelay={i * 45}
-                    />
+                  {CATEGORIES.map((cat) => (
+                    dayMeals[cat] ? (
+                      <MealRow
+                        key={cat}
+                        meal={dayMeals[cat]}
+                        category={cat}
+                        servings={servings}
+                        prepped={isPrepDone(activeDay, cat)}
+                        onTogglePrep={() => togglePrep(activeDay, cat)}
+                        onView={(m) => setViewMeal({ meal: m, dayIdx: activeDay, category: cat })}
+                      />
+                    ) : (
+                      <button key={cat} onClick={() => openSwap(activeDay, cat)}
+                        className="flex items-center gap-3.5 tap-target transition-all active:scale-[0.99]"
+                        style={{ padding: '13px 15px', borderRadius: 18, border: '1.5px dashed var(--border-2)', background: 'transparent' }}>
+                        <span className="flex items-center justify-center shrink-0" style={{ width: 28, height: 28, borderRadius: 9, border: '2px dashed var(--border-2)', color: 'var(--text-3)' }}>
+                          <Plus size={15} />
+                        </span>
+                        <span className="flex items-center justify-center shrink-0" style={{ width: 46, height: 46, borderRadius: 14, background: 'var(--surface-2)', fontSize: 20, opacity: 0.5 }}>
+                          {CAT_ICONS[cat]}
+                        </span>
+                        <div className="text-left">
+                          <p style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{cat}</p>
+                          <p className="font-display font-semibold" style={{ fontSize: 15, color: 'var(--text-3)' }}>Add a meal</p>
+                        </div>
+                      </button>
+                    )
                   ))}
 
                   {/* Optional dessert */}
                   {dayMeals.Dessert ? (
-                    <div className="card flex items-center gap-3 p-2.5" style={{ borderColor: 'var(--accent)' }}>
-                      <div className="flex items-center justify-center shrink-0" style={{ width: 34, height: 34, borderRadius: 9, background: 'var(--accent-light)', fontSize: 16 }}>🍰</div>
-                      <button onClick={() => setViewMeal({ meal: dayMeals.Dessert, dayIdx: activeDay, category: 'Dessert' })} className="flex-1 min-w-0 text-left">
-                        <p style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>Dessert</p>
-                        <p className="font-display font-semibold truncate" style={{ fontSize: 14, color: 'var(--text)' }}>{dayMeals.Dessert.item_name}</p>
-                      </button>
-                      <button onClick={() => removeDessert(activeDay)} className="btn-ghost btn-icon shrink-0" title="Remove dessert" style={{ color: 'var(--text-3)' }}>
-                        <X size={16} />
-                      </button>
-                    </div>
+                    <MealRow
+                      meal={dayMeals.Dessert}
+                      category="Dessert"
+                      servings={servings}
+                      prepped={isPrepDone(activeDay, 'Dessert')}
+                      onTogglePrep={() => togglePrep(activeDay, 'Dessert')}
+                      onView={(m) => setViewMeal({ meal: m, dayIdx: activeDay, category: 'Dessert' })}
+                      onRemove={() => removeDessert(activeDay)}
+                      accent
+                    />
                   ) : (
                     <button onClick={() => setDessertPickerDay(activeDay)}
                       className="flex items-center justify-center gap-2 tap-target transition-all active:scale-[0.98]"
-                      style={{ padding: '11px', borderRadius: 'var(--radius-sm)', border: '1.5px dashed var(--border-2)', background: 'transparent', color: 'var(--text-2)', fontSize: 13.5, fontWeight: 600 }}>
+                      style={{ padding: '12px', borderRadius: 18, border: '1.5px dashed var(--border-2)', background: 'transparent', color: 'var(--text-2)', fontSize: 13.5, fontWeight: 600 }}>
                       🍰 Want dessert?
                     </button>
                   )}

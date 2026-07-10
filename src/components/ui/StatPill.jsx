@@ -20,11 +20,11 @@ export default function StatPill({ kind = 'cal', value, tone = 'accent', size = 
   return (
     <span className="inline-flex items-center gap-1 shrink-0"
       style={{
-        background: t.bg, borderRadius: 8,
-        padding: isSm ? '2px 6px' : '3px 8px',
+        background: t.bg, borderRadius: 9,
+        padding: isSm ? '3px 7px' : '5px 10px',
       }}>
-      <Icon size={isSm ? 11 : 12} style={{ color: t.icon }} />
-      <span className="nums font-display" style={{ fontSize: isSm ? 11 : 12, fontWeight: 700, color: t.fg }}>
+      <Icon size={isSm ? 11 : 13} style={{ color: t.icon }} />
+      <span className="nums font-display" style={{ fontSize: isSm ? 11 : 13, fontWeight: 700, color: t.fg }}>
         {value}
       </span>
     </span>

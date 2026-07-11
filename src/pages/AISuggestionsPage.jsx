@@ -5,7 +5,6 @@ import { useAuth } from '../hooks/useAuth'
 import { getMealSuggestions, analyzeMealPhoto, detectFridgeIngredients } from '../lib/aiFeatures'
 import { matchMealsToIngredients } from '../lib/fridgeMatch'
 import { fileToCompressedDataURL } from '../lib/imageUtils'
-import PageHeader from '../components/planner/PageHeader'
 import {
   Sparkles, Loader2, Plus, RefreshCw,
   X, Edit2, Check, BookOpen, Globe, Layers,
@@ -351,13 +350,23 @@ export default function AISuggestionsPage() {
   ]
 
   return (
-    <div className="page-container" style={{ animation:'fadeIn 0.35s ease', maxWidth:'820px' }}>
+    <div className="max-w-2xl mx-auto px-4 pt-4 sm:pt-6" style={{ animation:'fadeIn 0.35s ease' }}>
 
-      <PageHeader eyebrow="AI Chef" title="Meal Suggestions"
-        subtitle="Tell me what's in your fridge — I'll suggest meals you can make right now." />
+      {/* Header — matches Today/Week */}
+      <div className="mb-1">
+        <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>
+          AI Chef
+        </p>
+        <h1 className="font-display font-bold" style={{ fontSize: 26, letterSpacing: '-0.03em', color: 'var(--text)', marginTop: 3 }}>
+          Meal ideas
+        </h1>
+        <p style={{ fontSize: 13.5, color: 'var(--text-3)', marginTop: 5, lineHeight: 1.5 }}>
+          Tell me what's in your fridge — I'll suggest meals you can make right now.
+        </p>
+      </div>
 
       {/* Context chips */}
-      <div className="flex flex-wrap gap-2 mb-5 mt-1" style={{ animation:'slideUp 0.4s ease 0.03s both' }}>
+      <div className="flex flex-wrap gap-2 mb-5 mt-3" style={{ animation:'slideUp 0.4s ease 0.03s both' }}>
         <span className="badge flex items-center gap-1.5" style={{ background:'var(--brand-light)', color:'var(--brand-text)', border:'1px solid var(--brand)', padding:'5px 11px', fontSize:11.5 }}>
           <Users size={12} /> Cooking for {servings}
         </span>
@@ -378,20 +387,18 @@ export default function AISuggestionsPage() {
         <button
           onClick={() => { if (!analyzing) setPhotoMenuOpen(v => !v) }}
           disabled={analyzing}
-          className="w-full text-left rounded-2xl mb-4 transition-all tap-target"
+          className="w-full text-left rounded-2xl mb-3 transition-all tap-target card-hover"
           style={{
             padding: '16px 18px',
-            background: 'linear-gradient(135deg, var(--brand-light), var(--surface-2))',
-            border: '1px solid var(--brand)',
             animation: 'slideUp 0.4s ease 0.04s both',
             opacity: analyzing ? 0.7 : 1,
           }}>
           <div className="flex items-center gap-3.5">
             <div className="shrink-0 flex items-center justify-center rounded-2xl"
-              style={{ width: 48, height: 48, background: 'var(--brand)' }}>
+              style={{ width: 48, height: 48, background: 'var(--accent-light)' }}>
               {analyzing
-                ? <Loader2 size={22} className="animate-[spin_1s_linear_infinite]" style={{ color: '#fff' }} />
-                : <Camera size={22} style={{ color: '#fff' }} />}
+                ? <Loader2 size={22} className="animate-[spin_1s_linear_infinite]" style={{ color: 'var(--accent-dark)' }} />
+                : <Camera size={22} style={{ color: 'var(--accent-dark)' }} />}
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-display font-semibold" style={{ fontSize: 16, color: 'var(--text)', letterSpacing: '-0.02em' }}>
@@ -404,7 +411,7 @@ export default function AISuggestionsPage() {
               </p>
             </div>
             {!analyzing && (
-              <span className="badge shrink-0" style={{ fontSize: 10, background: 'var(--brand)', color: '#fff', border: 'none' }}>NEW</span>
+              <span className="badge shrink-0" style={{ fontSize: 10, background: 'var(--accent)', color: '#1A1C16', border: 'none' }}>NEW</span>
             )}
           </div>
         </button>
@@ -625,9 +632,9 @@ export default function AISuggestionsPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full font-semibold transition-all tap-target"
               style={{
                 fontSize:12,
-                background: listening ? 'rgba(212,61,43,0.12)' : 'var(--brand-light)',
-                color: listening ? 'var(--danger)' : 'var(--brand-text)',
-                border: `1px solid ${listening ? 'rgba(212,61,43,0.25)' : 'var(--brand)'}`,
+                background: listening ? 'rgba(212,61,43,0.12)' : 'var(--accent-light)',
+                color: listening ? 'var(--danger)' : 'var(--accent-text)',
+                border: `1px solid ${listening ? 'rgba(212,61,43,0.25)' : 'var(--accent)'}`,
               }}>
               <Mic size={13} className={listening ? 'animate-pulse' : ''} />
               {listening ? 'Listening…' : 'Speak'}

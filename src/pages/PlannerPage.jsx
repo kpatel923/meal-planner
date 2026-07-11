@@ -402,86 +402,83 @@ export default function PlannerPage() {
       <div className="flex-1 min-w-0 flex flex-col">
 
         {/* ── Header bar ── */}
-        <div className="px-4 sm:px-6 lg:px-8 pt-5 pb-3" style={{ borderBottom: '1px solid var(--border)' }}>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-3 min-w-0">
+        <div className="px-4 pt-4 sm:pt-6 pb-3">
+          <div className="max-w-2xl mx-auto">
+            <div className="flex items-center justify-between mb-1">
+              <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>
+                {weeklyPlan ? formatWeekRange(weekDates) : 'Meal planner'}
+              </p>
               <button onClick={() => navigate('/today')}
                 className="flex items-center gap-1.5 tap-target transition-all active:scale-95 shrink-0"
-                style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 12px', fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 12px', boxShadow: 'var(--shadow-sm)', fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
                 <Home size={13} /> Today
               </button>
-              <h1 className="font-display font-semibold truncate" style={{ fontSize: 20, letterSpacing: '-0.03em', color: 'var(--text)' }}>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <h1 className="font-display font-bold truncate" style={{ fontSize: 26, letterSpacing: '-0.03em', color: 'var(--text)' }}>
                 {weeklyPlan ? 'Your week' : 'Plan your week'}
               </h1>
-              <span className="nums hidden sm:inline" style={{ fontSize: 12.5, color: 'var(--text-3)' }}>
-                {formatWeekRange(weekDates)}
-              </span>
-            </div>
 
-            <div className="flex items-center gap-2">
-              {!weeklyPlan && (
-                <p style={{ fontSize: 12, color: 'var(--text-3)' }} className="hidden sm:block">
-                  Generate, then tap Tune to refine.
-                </p>
-              )}
-
-              <div style={{ position: 'relative' }}>
-                <button onClick={() => plans?.length > 0 ? setShowGenMenu(v => !v) : handleGenerate()}
-                  disabled={generating || !dietTypes.length}
-                  className="btn-primary btn tap-target gap-2" style={{ height: 36 }}>
-                  {generating
-                    ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
-                    : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span>{plans?.length > 0 && <ChevronDown size={13} />}</>}
-                </button>
-                {showGenMenu && plans?.length > 0 && (
-                  <>
-                    <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowGenMenu(false)} />
-                    <div className="card" style={{ position: 'absolute', top: 42, right: 0, zIndex: 41, width: 230, padding: 6, boxShadow: 'var(--shadow-lg)' }}>
-                      <button onClick={() => { setShowGenMenu(false); handleGenerate() }}
-                        className="w-full flex items-center gap-2.5 tap-target text-left" style={{ padding: '10px 12px', borderRadius: 12, fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
-                        <Wand2 size={15} style={{ color: 'var(--accent-dark)' }} /> {weeklyPlan ? 'Generate new week' : 'Generate a new plan'}
-                      </button>
-                      <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)' }}>Load a saved plan</div>
-                      {plans.slice(0, 5).map(p => (
-                        <button key={p.id} onClick={() => { setShowGenMenu(false); handleLoadPlan(p) }}
-                          className="w-full flex items-center gap-2.5 tap-target text-left" style={{ padding: '9px 12px', borderRadius: 12, fontSize: 13, color: 'var(--text-2)' }}>
-                          <Bookmark size={14} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
-                          <span className="truncate">{p.name || 'Saved plan'}</span>
+              <div className="flex items-center gap-2 shrink-0">
+                <div style={{ position: 'relative' }}>
+                  <button onClick={() => plans?.length > 0 ? setShowGenMenu(v => !v) : handleGenerate()}
+                    disabled={generating || !dietTypes.length}
+                    className="btn-primary btn tap-target gap-2" style={{ height: 36 }}>
+                    {generating
+                      ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
+                      : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span>{plans?.length > 0 && <ChevronDown size={13} />}</>}
+                  </button>
+                  {showGenMenu && plans?.length > 0 && (
+                    <>
+                      <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowGenMenu(false)} />
+                      <div className="card" style={{ position: 'absolute', top: 42, right: 0, zIndex: 41, width: 230, padding: 6, boxShadow: 'var(--shadow-lg)' }}>
+                        <button onClick={() => { setShowGenMenu(false); handleGenerate() }}
+                          className="w-full flex items-center gap-2.5 tap-target text-left" style={{ padding: '10px 12px', borderRadius: 12, fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
+                          <Wand2 size={15} style={{ color: 'var(--accent-dark)' }} /> {weeklyPlan ? 'Generate new week' : 'Generate a new plan'}
                         </button>
-                      ))}
-                    </div>
-                  </>
+                        <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-3)' }}>Load a saved plan</div>
+                        {plans.slice(0, 5).map(p => (
+                          <button key={p.id} onClick={() => { setShowGenMenu(false); handleLoadPlan(p) }}
+                            className="w-full flex items-center gap-2.5 tap-target text-left" style={{ padding: '9px 12px', borderRadius: 12, fontSize: 13, color: 'var(--text-2)' }}>
+                            <Bookmark size={14} style={{ color: 'var(--text-3)', flexShrink: 0 }} />
+                            <span className="truncate">{p.name || 'Saved plan'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {weeklyPlan && (
+                  <button onClick={() => setShowTune(true)}
+                    className="btn-secondary btn tap-target gap-2" style={{ height: 36 }}>
+                    <SlidersHorizontal size={15} /> <span className="hidden sm:inline">Tune</span>
+                  </button>
                 )}
               </div>
-
-              {weeklyPlan && (
-                <button onClick={() => setShowTune(true)}
-                  className="btn-secondary btn tap-target gap-2" style={{ height: 36 }}>
-                  <SlidersHorizontal size={15} /> <span className="hidden sm:inline">Tune</span>
-                </button>
-              )}
             </div>
           </div>
-
-          {/* Pre-generation options (diet/servings/repeats live in Tune after a plan exists) */}
         </div>
 
         {/* ── Day strip ── */}
         {weeklyPlan && (
-          <div className="px-3 sm:px-5 lg:px-7 pt-3" style={{ borderBottom: '1px solid var(--border)' }}>
-            <DayStrip
-              weeklyPlan={weeklyPlan}
-              activeDay={activeDay}
-              onSelect={setActiveDay}
-              isPrepDone={isPrepDone}
-              weekDates={weekDates}
-              todayIdx={todayIdx}
-            />
+          <div className="px-4 pt-1 pb-2">
+            <div className="max-w-2xl mx-auto">
+              <DayStrip
+                weeklyPlan={weeklyPlan}
+                activeDay={activeDay}
+                onSelect={setActiveDay}
+                isPrepDone={isPrepDone}
+                weekDates={weekDates}
+                todayIdx={todayIdx}
+              />
+            </div>
           </div>
         )}
 
         {/* ── Day content ── */}
-        <div className="flex-1 px-4 sm:px-6 lg:px-8 py-5 pb-40 lg:pb-8">
+        <div className="flex-1 px-4 py-4">
+          <div className="max-w-2xl mx-auto">
           {!weeklyPlan ? (
             <EmptyPlan generating={generating} onGenerate={handleGenerate} mealCount={filteredMeals.length}
               hasSavedPlans={plans?.length > 0} onLoadSaved={() => navigate('/saved')}
@@ -653,6 +650,7 @@ export default function PlannerPage() {
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
 

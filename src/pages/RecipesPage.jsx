@@ -268,14 +268,14 @@ export default function RecipesPage() {
   const showCats = catFilter ? [catFilter] : ALL_CATS
 
   return (
-    <div className="page-container" style={{ animation:'fadeIn 0.35s ease' }}>
+    <div className="max-w-2xl mx-auto px-4 pt-4 sm:pt-6" style={{ animation:'fadeIn 0.35s ease' }}>
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5 mb-8">
+      {/* Header — matches Today/Week/AI */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">
         <div>
-          <span className="page-eyebrow">Recipe Library</span>
-          <h1 className="section-title">My Recipes</h1>
-          <p className="mt-1.5" style={{ color:'var(--text-3)', fontSize:'15.5px' }}>{meals.length} meals in your library</p>
+          <span style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>Recipe Library</span>
+          <h1 className="font-display font-bold" style={{ fontSize: 26, letterSpacing: '-0.03em', color: 'var(--text)', marginTop: 3 }}>My Recipes</h1>
+          <p style={{ color:'var(--text-3)', fontSize:'13.5px', marginTop: 5 }}>{meals.length} meals in your library</p>
         </div>
         <div className="flex gap-2.5 flex-wrap">
           <input ref={fileRef} type="file" accept=".json,.csv" className="hidden" onChange={handleImport} />

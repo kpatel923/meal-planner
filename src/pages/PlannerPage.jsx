@@ -21,14 +21,13 @@ import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
 import RecipeDetailModal, { CAT_ICONS } from '../components/RecipeDetailModal'
 import DayStrip from '../components/planner/DayStrip'
 import MealRow from '../components/ui/MealRow'
-import MobileSheet from '../components/planner/MobileSheet'
 import {
   WeekOverview, PanelSection,
 } from '../components/planner/PlannerPanels'
 import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
-  CalendarPlus, RefreshCw, BarChart3, Plus,
+  CalendarPlus, RefreshCw, Plus,
   Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, Home, ChevronDown,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -625,14 +624,13 @@ export default function PlannerPage() {
 
               {/* AI summary */}
               {weeklyPlan && (
-                <div className="rounded-2xl mt-5 p-4 flex items-start gap-3"
-                  style={{ border: '1px solid var(--brand-light)', background: 'var(--brand-light)' }}>
+                <div className="card mt-5 p-4 flex items-start gap-3">
                   <div className="shrink-0 flex items-center justify-center rounded-xl"
-                    style={{ width: 36, height: 36, background: 'var(--brand)' }}>
-                    <Wand2 size={16} className="text-white" />
+                    style={{ width: 36, height: 36, background: 'var(--accent-light)' }}>
+                    <Wand2 size={16} style={{ color: 'var(--accent-dark)' }} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold" style={{ fontSize: 12, color: 'var(--brand-text)', marginBottom: 2 }}>AI plan summary</p>
+                    <p className="font-semibold" style={{ fontSize: 12, color: 'var(--text)', marginBottom: 2 }}>AI plan summary</p>
                     {loadingDesc ? (
                       <div className="flex items-center gap-2" style={{ color: 'var(--text-3)', fontSize: 13 }}>
                         <Loader2 size={13} className="animate-[spin_1s_linear_infinite]" /> Analyzing your week…
@@ -641,11 +639,21 @@ export default function PlannerPage() {
                       <p style={{ fontSize: 13, color: 'var(--text-2)', lineHeight: 1.55 }}>{planDesc}</p>
                     ) : (
                       <button onClick={() => fetchAIDescription(weeklyPlan, true)}
-                        className="flex items-center gap-1.5 hover:opacity-70" style={{ fontSize: 12.5, color: 'var(--brand-text)', fontWeight: 600 }}>
+                        className="flex items-center gap-1.5 hover:opacity-70" style={{ fontSize: 12.5, color: 'var(--accent-dark)', fontWeight: 600 }}>
                         <Sparkles size={12} /> Generate summary
                       </button>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Week overview — inline on mobile (desktop has the sidebar) */}
+              {weeklyPlan && (
+                <div className="lg:hidden mt-6">
+                  <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-3)', margin: '0 2px 11px' }}>
+                    This week
+                  </p>
+                  <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
                 </div>
               )}
             </div>
@@ -663,24 +671,6 @@ export default function PlannerPage() {
           </PanelSection>
         </aside>
       )}
-
-      {/* ════════ MOBILE: slim stat strip ════════ */}
-      {weeklyPlan && (
-        <div className="lg:hidden stat-strip" style={{ padding: '8px 12px' }}>
-          <button onClick={() => setMobileSheet('overview')}
-            className="w-full flex items-center justify-center gap-1.5 rounded-xl tap-target"
-            style={{ height: 38, background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 12 }}>
-            <BarChart3 size={14} />
-            <span className="nums">{prepProgress.done}/{prepProgress.total} prepped</span>
-            <span style={{ color: 'var(--text-3)' }}>· Week overview</span>
-          </button>
-        </div>
-      )}
-
-      {/* ── Mobile sheets ── */}
-      <MobileSheet open={mobileSheet === 'overview'} onClose={() => setMobileSheet(null)} title="Week overview">
-        <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
-      </MobileSheet>
 
       {/* ════════ Undo toasts ════════ */}
       {undoStack.length > 0 && (

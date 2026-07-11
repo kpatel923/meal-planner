@@ -115,22 +115,55 @@ export function buildWeeklyPlan(meals, opts = {}) {
     grouped[cat].push(meal)
   }
 
-  // Build plan: { 0: { Breakfast: meal, Lunch: meal, ... }, 1: {...}, ... }
   const plan = {}
-  for (let day = 0; day < 7; day++) {
-    plan[day] = {}
-  }
+  for (let day = 0; day < 7; day++) plan[day] = {}
+
+  // Track every meal id already placed anywhere in the week, so the same
+  // dish never repeats until we've exhausted the available options.
+  const usedIds = new Set()
 
   for (const category of CATEGORIES) {
-    const selected = scoreAndSampleMeals(grouped[category] || [], 7, budgetMode)
+    const catMeals = grouped[category] || []
+    if (!catMeals.length) continue
+
+    // Rank the whole category (score/shuffle), then walk the week assigning
+    // the best not-yet-used meal. Only when every meal has been used once do
+    // we allow reuse — and we reset so reuse is also spread out, not clumped.
+    let ranked = rankMeals(catMeals, budgetMode)
+    let available = ranked.filter(m => !usedIds.has(m.id))
+
     for (let day = 0; day < 7; day++) {
-      if (selected[day]) {
-        plan[day][category] = selected[day]
+      if (!available.length) {
+        // Pool exhausted for this category — allow reuse, reshuffled so the
+        // repeats are spread rather than the same dish back-to-back.
+        available = shuffleArray(ranked.slice())
+      }
+      const meal = available.shift()
+      if (meal) {
+        plan[day][category] = meal
+        usedIds.add(meal.id)
       }
     }
   }
 
   return plan
+}
+
+// Rank meals within a category: score by ingredient overlap + favorites,
+// then lightly shuffle so plans vary between generations while still
+// favouring good matches. Returns the full category, best-first-ish.
+function rankMeals(catMeals, budgetMode) {
+  const scored = scoreAndSampleMeals(catMeals, catMeals.length, budgetMode)
+  // Light shuffle: nudge order randomly but keep higher-scored meals near the
+  // front, so each generation differs without becoming fully random.
+  return scored
+    .map((m, i) => ({ m, k: i + (Math.random() - 0.5) * 3 }))
+    .sort((a, b) => a.k - b.k)
+    .map(x => x.m)
+}
+
+function shuffleArray(arr) {
+  return arr.sort(() => Math.random() - 0.5)
 }
 
 // Build grocery list from weekly plan

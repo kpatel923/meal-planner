@@ -27,8 +27,8 @@ import {
 import {
   Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
-  CalendarPlus, RefreshCw, Plus,
-  Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, Home, ChevronDown,
+  CalendarPlus, RefreshCw, BarChart3, Plus,
+  Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, ChevronLeft, ChevronDown,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -106,6 +106,7 @@ export default function PlannerPage() {
   }
 
   const [showGenMenu, setShowGenMenu] = useState(false)
+  const [overviewOpen, setOverviewOpen] = useState(false)
   function handleLoadPlan(plan) {
     storeLoadPlan(deserializePlanRow(plan))
     toast.success(`Loaded "${plan.name || 'saved plan'}"`)
@@ -401,28 +402,38 @@ export default function PlannerPage() {
       <div className="flex-1 min-w-0 flex flex-col">
 
         {/* ── Header bar ── */}
-        <div className="px-4 pt-4 sm:pt-6 pb-3">
+        <div className="px-4 pt-4 sm:pt-6 pb-2">
           <div className="max-w-2xl mx-auto">
-            <div className="flex items-center justify-between mb-1">
-              <p style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>
-                {weeklyPlan ? formatWeekRange(weekDates) : 'Meal planner'}
-              </p>
-              <button onClick={() => navigate('/today')}
-                className="flex items-center gap-1.5 tap-target transition-all active:scale-95 shrink-0"
-                style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 999, padding: '5px 12px', boxShadow: 'var(--shadow-sm)', fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
-                <Home size={13} /> Today
-              </button>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <h1 className="font-display font-bold truncate" style={{ fontSize: 26, letterSpacing: '-0.03em', color: 'var(--text)' }}>
-                {weeklyPlan ? 'Your week' : 'Plan your week'}
-              </h1>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <button onClick={() => navigate('/today')}
+                  className="flex items-center gap-1 tap-target transition-all active:scale-95 mb-1.5"
+                  style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>
+                  <ChevronLeft size={13} /> Today
+                </button>
+                <h1 className="font-display font-bold truncate" style={{ fontSize: 26, letterSpacing: '-0.03em', color: 'var(--text)' }}>
+                  {weeklyPlan ? 'Your week' : 'Plan your week'}
+                </h1>
+                {weeklyPlan && (
+                  <p className="nums" style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>
+                    {formatWeekRange(weekDates)}
+                  </p>
+                )}
+              </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0" style={{ marginTop: 22 }}>
+                {weeklyPlan && (
+                  <button onClick={() => setShowTune(true)}
+                    aria-label="Tune plan"
+                    className="flex items-center justify-center tap-target transition-all active:scale-95"
+                    style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--surface)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', color: 'var(--text-2)' }}>
+                    <SlidersHorizontal size={16} />
+                  </button>
+                )}
                 <div style={{ position: 'relative' }}>
                   <button onClick={() => plans?.length > 0 ? setShowGenMenu(v => !v) : handleGenerate()}
                     disabled={generating || !dietTypes.length}
-                    className="btn-primary btn tap-target gap-2" style={{ height: 36 }}>
+                    className="btn-primary btn tap-target gap-2" style={{ height: 38 }}>
                     {generating
                       ? <><Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> <span className="hidden sm:inline">Building…</span></>
                       : <><Wand2 size={15} /> <span className="hidden sm:inline">{weeklyPlan ? 'Regenerate' : 'Generate'}</span>{plans?.length > 0 && <ChevronDown size={13} />}</>}
@@ -430,7 +441,7 @@ export default function PlannerPage() {
                   {showGenMenu && plans?.length > 0 && (
                     <>
                       <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setShowGenMenu(false)} />
-                      <div className="card" style={{ position: 'absolute', top: 42, right: 0, zIndex: 41, width: 230, padding: 6, boxShadow: 'var(--shadow-lg)' }}>
+                      <div className="card" style={{ position: 'absolute', top: 44, right: 0, zIndex: 41, width: 230, padding: 6, boxShadow: 'var(--shadow-lg)' }}>
                         <button onClick={() => { setShowGenMenu(false); handleGenerate() }}
                           className="w-full flex items-center gap-2.5 tap-target text-left" style={{ padding: '10px 12px', borderRadius: 12, fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>
                           <Wand2 size={15} style={{ color: 'var(--accent-dark)' }} /> {weeklyPlan ? 'Generate new week' : 'Generate a new plan'}
@@ -447,13 +458,6 @@ export default function PlannerPage() {
                     </>
                   )}
                 </div>
-
-                {weeklyPlan && (
-                  <button onClick={() => setShowTune(true)}
-                    className="btn-secondary btn tap-target gap-2" style={{ height: 36 }}>
-                    <SlidersHorizontal size={15} /> <span className="hidden sm:inline">Tune</span>
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -647,13 +651,28 @@ export default function PlannerPage() {
                 </div>
               )}
 
-              {/* Week overview — inline on mobile (desktop has the sidebar) */}
+              {/* Week overview — collapsible on mobile (desktop has the sidebar) */}
               {weeklyPlan && (
                 <div className="lg:hidden mt-6">
-                  <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-3)', margin: '0 2px 11px' }}>
-                    This week
-                  </p>
-                  <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
+                  <button onClick={() => setOverviewOpen(v => !v)}
+                    className="card w-full flex items-center gap-3 tap-target transition-all active:scale-[0.99]"
+                    style={{ padding: '13px 15px' }}>
+                    <div className="flex items-center justify-center shrink-0" style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--accent-light)' }}>
+                      <BarChart3 size={16} style={{ color: 'var(--accent-dark)' }} />
+                    </div>
+                    <div className="flex-1 text-left">
+                      <p className="font-display font-bold" style={{ fontSize: 14.5, color: 'var(--text)' }}>Week overview</p>
+                      <p className="nums" style={{ fontSize: 11.5, color: 'var(--text-3)' }}>
+                        {prepProgress.done}/{prepProgress.total} prepped · time, cost & macros
+                      </p>
+                    </div>
+                    <ChevronDown size={18} style={{ color: 'var(--text-3)', transform: overviewOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.25s ease' }} />
+                  </button>
+                  {overviewOpen && (
+                    <div style={{ marginTop: 10, animation: 'cardStagger 0.3s ease both' }}>
+                      <WeekOverview stats={stats} prepProgress={prepProgress} perDay={perDay} weeklyPlan={mergedPlan} servings={servings} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

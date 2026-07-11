@@ -34,23 +34,23 @@ export default function DayStrip({ weeklyPlan, activeDay, onSelect, isPrepDone, 
             style={{
               flex: 1, minWidth: 0, padding: '8px 2px 7px',
               borderRadius: 14,
-              background: isActive ? 'var(--brand)' : 'var(--surface)',
-              border: `1px solid ${isActive ? 'var(--brand)' : 'var(--border)'}`,
-              boxShadow: isActive ? 'var(--shadow-brand)' : 'var(--shadow-xs)',
+              background: isActive ? 'var(--accent)' : 'var(--surface)',
+              border: `1px solid ${isActive ? 'var(--accent)' : 'var(--hairline)'}`,
+              boxShadow: isActive ? '0 4px 12px rgba(124,181,24,0.25)' : 'none',
               transform: isActive ? 'translateY(-1px)' : 'none',
             }}
             onMouseEnter={e => { if (!isActive) e.currentTarget.style.boxShadow = 'var(--shadow-sm)' }}
-            onMouseLeave={e => { if (!isActive) e.currentTarget.style.boxShadow = 'var(--shadow-xs)' }}
+            onMouseLeave={e => { if (!isActive) e.currentTarget.style.boxShadow = 'none' }}
           >
             <span style={{
-              fontSize: 9.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: isActive ? 'rgba(255,255,255,0.65)' : 'var(--text-3)',
+              fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: isActive ? '#1A1C16' : 'var(--text-3)',
             }}>
               {SHORT[i]}
             </span>
             <span className="nums" style={{
               fontSize: 17, fontWeight: 700, lineHeight: 1.15, marginTop: 1,
-              color: isActive ? '#fff' : (isToday ? 'var(--accent-text)' : 'var(--text)'),
+              color: isActive ? '#1A1C16' : (isToday ? 'var(--accent-text)' : 'var(--text)'),
             }}>
               {dateNum}
             </span>

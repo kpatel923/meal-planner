@@ -468,14 +468,30 @@
 .sheet-panel {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
   background: var(--surface);
-  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-  border-top: 1px solid var(--border);
-  box-shadow: var(--shadow-xl);
-  animation: sheetUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
-  max-height: 82dvh; display: flex; flex-direction: column;
+  border-radius: 26px 26px 0 0;
+  border-top: 1px solid var(--hairline);
+  box-shadow: 0 -12px 40px rgba(22,23,15,0.14);
+  animation: sheetUp 0.34s cubic-bezier(0.22,1,0.36,1) both;
+  max-height: 86dvh; display: flex; flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
 }
 .dark .sheet-panel { box-shadow: 0 -12px 40px rgba(0,0,0,0.5); }
+/* Desktop: centered dialog instead of a bottom sheet */
+@media (min-width: 640px) {
+  .sheet-panel {
+    left: 50%; right: auto; bottom: auto; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 480px; max-width: calc(100vw - 48px);
+    border-radius: 24px; border: 1px solid var(--hairline);
+    max-height: 86dvh;
+    animation: modalPop 0.28s cubic-bezier(0.22,1,0.36,1) both;
+  }
+  .sheet-lg { width: 620px; }
+}
+@keyframes modalPop {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
 .sheet-grip {
   width: 38px; height: 4px; border-radius: 99px;
   background: var(--border-2); margin: 10px auto 4px;
@@ -524,3 +540,7 @@
   @keyframes pageIn { from { opacity: 1; } to { opacity: 1; } }
   @keyframes cardStagger { from { opacity: 1; } to { opacity: 1; } }
 }
+
+/* Mobile main-content clearance for the floating nav bar */
+.main-scroll { padding-bottom: calc(env(safe-area-inset-bottom) + 96px); }
+@media (min-width: 1024px) { .main-scroll { padding-bottom: 0; } }

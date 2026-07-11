@@ -142,45 +142,55 @@ export default function AppLayout() {
       </aside>
 
       {/* ── Main content ─────────────────────────────────────── */}
-      <main className="flex-1 min-w-0 pb-28 lg:pb-0 safe-top" style={{ overflowX: 'hidden' }}>
+      <main className="flex-1 min-w-0 lg:pb-0 safe-top main-scroll" style={{ overflowX: 'hidden' }}>
         <div key={location.pathname} style={{ animation: 'pageIn 0.32s cubic-bezier(0.22,1,0.36,1)' }}>
           <Outlet />
         </div>
       </main>
 
-      {/* ── Mobile bottom nav ────────────────────────────────── */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-50 glass safe-bottom"
-        style={{ borderTop: '1px solid var(--border)' }}>
-        <div className="flex items-stretch">
+      {/* ── Mobile bottom nav — floating pill bar ────────────── */}
+      <nav className="lg:hidden fixed inset-x-0 z-50 safe-bottom"
+        style={{ bottom: 0, padding: '0 14px calc(env(safe-area-inset-bottom) + 12px)', pointerEvents: 'none' }}>
+        <div className="flex items-center justify-around"
+          style={{
+            background: 'var(--surface)',
+            border: '1px solid var(--hairline)',
+            borderRadius: 22,
+            boxShadow: '0 8px 30px rgba(22,23,15,0.12)',
+            padding: 8,
+            pointerEvents: 'auto',
+            backdropFilter: 'blur(12px)',
+          }}>
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to}
-              className="flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200">
+            <NavLink key={to} to={to} className="flex-1">
               {({ isActive }) => (
-                <>
-                  <div className="relative" style={{ transform: isActive ? 'scale(1.08)' : 'scale(1)', transition: 'transform 0.2s ease' }}>
-                    <Icon size={21} strokeWidth={isActive ? 2.4 : 1.7}
-                      style={{ color: isActive ? 'var(--brand)' : 'var(--text-3)' }} />
+                <div className="flex flex-col items-center gap-1 tap-target transition-all duration-250"
+                  style={{
+                    padding: '8px 6px', borderRadius: 15,
+                    background: isActive ? 'var(--accent-light)' : 'transparent',
+                  }}>
+                  <div className="relative">
+                    <Icon size={21} strokeWidth={isActive ? 2.4 : 1.8}
+                      style={{ color: isActive ? 'var(--accent-dark)' : 'var(--text-3)' }} />
                     {to === '/ai' && !isActive && (
-                      <div className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full"
-                        style={{ background: 'var(--brand)' }} />
+                      <div className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full" style={{ background: 'var(--accent)' }} />
                     )}
                   </div>
-                  <span className="font-medium" style={{ fontSize: '10px', letterSpacing: '-0.005em', color: isActive ? 'var(--brand)' : 'var(--text-3)' }}>
+                  <span className="font-display" style={{ fontSize: '9.5px', fontWeight: isActive ? 700 : 600, color: isActive ? 'var(--accent-dark)' : 'var(--text-3)' }}>
                     {label}
                   </span>
-                </>
+                </div>
               )}
             </NavLink>
           ))}
-          <button onClick={() => setMoreOpen(true)}
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-3 transition-all duration-200">
-            <div className="relative" style={{ transform: moreOpen ? 'scale(1.08)' : 'scale(1)', transition: 'transform 0.2s ease' }}>
-              <Menu size={21} strokeWidth={moreOpen ? 2.4 : 1.7}
-                style={{ color: moreOpen ? 'var(--brand)' : 'var(--text-3)' }} />
+          <button onClick={() => setMoreOpen(true)} className="flex-1">
+            <div className="flex flex-col items-center gap-1 tap-target transition-all duration-250"
+              style={{ padding: '8px 6px', borderRadius: 15, background: moreOpen ? 'var(--accent-light)' : 'transparent' }}>
+              <Menu size={21} strokeWidth={moreOpen ? 2.4 : 1.8} style={{ color: moreOpen ? 'var(--accent-dark)' : 'var(--text-3)' }} />
+              <span className="font-display" style={{ fontSize: '9.5px', fontWeight: moreOpen ? 700 : 600, color: moreOpen ? 'var(--accent-dark)' : 'var(--text-3)' }}>
+                More
+              </span>
             </div>
-            <span className="font-medium" style={{ fontSize: '10px', letterSpacing: '-0.005em', color: moreOpen ? 'var(--brand)' : 'var(--text-3)' }}>
-              More
-            </span>
           </button>
         </div>
       </nav>

@@ -149,17 +149,20 @@ export default function AppLayout() {
       </main>
 
       {/* ── Mobile bottom nav — floating pill bar ────────────── */}
+      {/* Fade scrim: content dissolves into the background as it nears the bar */}
+      <div className="lg:hidden fixed inset-x-0 bottom-0 z-40" aria-hidden="true"
+        style={{
+          height: 'calc(env(safe-area-inset-bottom) + 92px)',
+          background: 'linear-gradient(to top, var(--bg) 38%, transparent)',
+          pointerEvents: 'none',
+        }} />
       <nav className="lg:hidden fixed inset-x-0 z-50 safe-bottom"
         style={{ bottom: 0, padding: '0 14px calc(env(safe-area-inset-bottom) + 12px)', pointerEvents: 'none' }}>
-        <div className="flex items-center justify-around"
+        <div className="nav-glass flex items-center justify-around"
           style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--hairline)',
-            borderRadius: 22,
-            boxShadow: '0 8px 30px rgba(22,23,15,0.12)',
+            borderRadius: 24,
             padding: 8,
             pointerEvents: 'auto',
-            backdropFilter: 'blur(12px)',
           }}>
           {MOBILE_NAV.map(({ to, label, icon: Icon }) => (
             <NavLink key={to} to={to} className="flex-1">

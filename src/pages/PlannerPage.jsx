@@ -17,7 +17,7 @@ import { SEED_RECIPES } from '../lib/seedRecipes'
 import { recommendDesserts, aiDessertToMeal } from '../lib/desserts'
 import { SEED_DESSERTS } from '../lib/seedDesserts'
 import { formatCost } from '../lib/budget'
-import { getWeekDates, getTodayIndex, formatWeekRange } from '../lib/weekDates'
+import { getWeekDates, getTodayIndex, formatWeekRange, planningWeekOffset } from '../lib/weekDates'
 import RecipeDetailModal, { CAT_ICONS } from '../components/RecipeDetailModal'
 import DayStrip from '../components/planner/DayStrip'
 import MealRow from '../components/ui/MealRow'
@@ -61,6 +61,7 @@ export default function PlannerPage() {
 
   // ── Local UI state ────────────────────────────────────────────────
   const [activeDay,      setActiveDay]      = useState(() => {
+    if (planningWeekOffset() === 1) return 0   // next-week planning starts at Monday
     const t = getTodayIndex(); return t >= 0 ? t : 0
   })
   const [planName,       setPlanName]       = useState('')
@@ -93,7 +94,9 @@ export default function PlannerPage() {
     [allMeals, dietTypes],
   )
 
-  const weekDates = useMemo(() => getWeekDates(), [])
+  const planWeekOffset = useMemo(() => planningWeekOffset(), [])
+  const weekDates = useMemo(() => getWeekDates(new Date(), planWeekOffset), [planWeekOffset])
+  const isNextWeek = planWeekOffset === 1
   const todayIdx = useMemo(() => getTodayIndex(), [])
 
   // Keep the active day valid if a plan loads/clears.
@@ -125,7 +128,7 @@ export default function PlannerPage() {
     try {
       const plan = await generate(filteredMeals, user?.id, profile?.budget_mode || false)
       toast.success('Week generated!')
-      setActiveDay(todayIdx >= 0 ? todayIdx : 0)
+      setActiveDay(isNextWeek ? 0 : (todayIdx >= 0 ? todayIdx : 0))
       fetchAIDescription(plan)
     } catch {
       toast.error('Not enough meals — add more recipes first.')
@@ -415,7 +418,12 @@ export default function PlannerPage() {
                   {weeklyPlan ? 'Your week' : 'Plan your week'}
                 </h1>
                 {weeklyPlan && (
-                  <p className="nums" style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>
+                  <p className="nums flex items-center gap-1.5" style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 2 }}>
+                    {isNextWeek && (
+                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--accent-dark)', background: 'var(--accent-light)', padding: '1px 7px', borderRadius: 99 }}>
+                        Next week
+                      </span>
+                    )}
                     {formatWeekRange(weekDates)}
                   </p>
                 )}
@@ -473,7 +481,7 @@ export default function PlannerPage() {
                 onSelect={setActiveDay}
                 isPrepDone={isPrepDone}
                 weekDates={weekDates}
-                todayIdx={todayIdx}
+                todayIdx={isNextWeek ? -1 : todayIdx}
               />
             </div>
           </div>

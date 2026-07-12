@@ -4,11 +4,11 @@
 // Centralised here so the planner header, day strip, and any export share
 // one source of truth.
 
-export function getWeekDates(reference = new Date()) {
+export function getWeekDates(reference = new Date(), weekOffset = 0) {
   const today = new Date(reference)
   const mondayOffset = (today.getDay() + 6) % 7   // 0 = Monday
   const monday = new Date(today)
-  monday.setDate(today.getDate() - mondayOffset)
+  monday.setDate(today.getDate() - mondayOffset + weekOffset * 7)
   monday.setHours(0, 0, 0, 0)
 
   const dates = []
@@ -18,6 +18,19 @@ export function getWeekDates(reference = new Date()) {
     dates.push(d)
   }
   return dates
+}
+
+// On weekends (Sat/Sun) people are usually planning the week ahead, so the
+// planner labels its dates as NEXT week. Mon–Fri it shows the current week.
+// This only shifts the DISPLAYED DATES — there's still a single plan.
+export function isWeekendPlanningAhead(reference = new Date()) {
+  const day = new Date(reference).getDay()   // 0 = Sun, 6 = Sat
+  return day === 0 || day === 6
+}
+
+// The week the planner should DISPLAY: 0 = this week, 1 = next week.
+export function planningWeekOffset(reference = new Date()) {
+  return isWeekendPlanningAhead(reference) ? 1 : 0
 }
 
 // Index (0–6) of today within the current week, or -1 if today is outside it.

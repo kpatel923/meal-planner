@@ -15,7 +15,7 @@ import ProgressRing from '../components/ui/ProgressRing'
 import { useCountUp } from '../hooks/useCountUp'
 import {
   Flame, Clock, Sparkles, CalendarDays,
-  Snowflake, Trophy, PartyPopper, Check, BookOpen,
+  Snowflake, Trophy, PartyPopper, Check, BookOpen, Plus,
 } from 'lucide-react'
 
 function greeting() {
@@ -225,7 +225,7 @@ export default function TodayPage() {
             ))}
           </div>
 
-          {/* Dessert — optional add-on */}
+          {/* Dessert — a first-class slot (opt-in; add from the planner) */}
           {todayDessert ? (
             <MealRow
               meal={todayDessert}
@@ -239,9 +239,18 @@ export default function TodayPage() {
             />
           ) : (
             <button onClick={() => navigate('/planner')}
-              className="w-full flex items-center justify-center gap-2 tap-target transition-all active:scale-[0.98] mb-4"
-              style={{ padding: 12, borderRadius: 'var(--radius-sm)', border: '1.5px dashed var(--border-2)', background: 'transparent', color: 'var(--text-2)', fontSize: 13.5, fontWeight: 600 }}>
-              🍰 Want dessert?
+              className="w-full flex items-center gap-3.5 tap-target transition-all active:scale-[0.99] mb-4"
+              style={{ padding: '13px 15px', borderRadius: 18, border: '1.5px dashed var(--accent)', background: 'transparent' }}>
+              <span className="flex items-center justify-center shrink-0" style={{ width: 28, height: 28, borderRadius: 9, border: '2px dashed var(--accent)', color: 'var(--accent-dark)' }}>
+                <Plus size={15} />
+              </span>
+              <span className="flex items-center justify-center shrink-0" style={{ width: 46, height: 46, borderRadius: 14, background: 'var(--accent-light)', fontSize: 20 }}>
+                🍰
+              </span>
+              <div className="text-left">
+                <p style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>Dessert</p>
+                <p className="font-display font-semibold" style={{ fontSize: 15, color: 'var(--text-2)' }}>Add a dessert</p>
+              </div>
             </button>
           )}
         </>

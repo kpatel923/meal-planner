@@ -604,7 +604,7 @@ export default function PlannerPage() {
                     )
                   ))}
 
-                  {/* Optional dessert */}
+                  {/* Dessert — a first-class slot, filled from list or AI (opt-in) */}
                   {dayMeals.Dessert ? (
                     <MealRow
                       meal={dayMeals.Dessert}
@@ -618,9 +618,18 @@ export default function PlannerPage() {
                     />
                   ) : (
                     <button onClick={() => setDessertPickerDay(activeDay)}
-                      className="flex items-center justify-center gap-2 tap-target transition-all active:scale-[0.98]"
-                      style={{ padding: '12px', borderRadius: 18, border: '1.5px dashed var(--border-2)', background: 'transparent', color: 'var(--text-2)', fontSize: 13.5, fontWeight: 600 }}>
-                      🍰 Want dessert?
+                      className="flex items-center gap-3.5 tap-target transition-all active:scale-[0.99]"
+                      style={{ padding: '13px 15px', borderRadius: 18, border: '1.5px dashed var(--accent)', background: 'transparent' }}>
+                      <span className="flex items-center justify-center shrink-0" style={{ width: 28, height: 28, borderRadius: 9, border: '2px dashed var(--accent)', color: 'var(--accent-dark)' }}>
+                        <Plus size={15} />
+                      </span>
+                      <span className="flex items-center justify-center shrink-0" style={{ width: 46, height: 46, borderRadius: 14, background: 'var(--accent-light)', fontSize: 20 }}>
+                        🍰
+                      </span>
+                      <div className="text-left">
+                        <p style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>Dessert</p>
+                        <p className="font-display font-semibold" style={{ fontSize: 15, color: 'var(--text-2)' }}>Add a dessert</p>
+                      </div>
                     </button>
                   )}
                 </div>

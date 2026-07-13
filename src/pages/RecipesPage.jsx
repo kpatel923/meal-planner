@@ -268,7 +268,7 @@ export default function RecipesPage() {
   const showCats = catFilter ? [catFilter] : ALL_CATS
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pt-4 sm:pt-6" style={{ animation:'fadeIn 0.35s ease' }}>
+    <div className="max-w-2xl lg:max-w-4xl mx-auto px-4 pt-4 sm:pt-6" style={{ animation:'fadeIn 0.35s ease' }}>
 
       {/* Header — matches Today/Week/AI */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-6">

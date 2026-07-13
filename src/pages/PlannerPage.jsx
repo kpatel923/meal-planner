@@ -285,11 +285,24 @@ export default function PlannerPage() {
 
   function handleShare(type) { setShareType(type); setShowShareModal(true) }
 
-  const swapMeals = swapTarget
-    ? allMeals.filter(m =>
-        m.category === swapTarget.category &&
-        m.item_name.toLowerCase().includes(swapSearch.toLowerCase()))
-    : []
+  const swapMeals = useMemo(() => {
+    if (!swapTarget) return []
+    const q = swapSearch.toLowerCase()
+    const matches = allMeals.filter(m =>
+      m.category === swapTarget.category &&
+      m.item_name.toLowerCase().includes(q))
+    // Dedupe by normalized name so duplicate library rows (e.g. from a
+    // re-import) only appear once in the swap picker.
+    const seen = new Set()
+    const unique = []
+    for (const m of matches) {
+      const key = m.item_name.trim().toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      unique.push(m)
+    }
+    return unique
+  }, [swapTarget, swapSearch, allMeals])
 
   const stats = useMemo(() => {
     if (!weeklyPlan) return null

@@ -350,7 +350,7 @@ export default function AISuggestionsPage() {
   ]
 
   return (
-    <div className="max-w-2xl mx-auto px-4 pt-4 sm:pt-6" style={{ animation:'fadeIn 0.35s ease' }}>
+    <div className="max-w-2xl lg:max-w-3xl mx-auto px-4 pt-4 sm:pt-6" style={{ animation:'fadeIn 0.35s ease' }}>
 
       {/* Header — matches Today/Week */}
       <div className="mb-1">

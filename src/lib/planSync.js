@@ -32,6 +32,29 @@ export function syncActivePlan(partial) {
   timer = setTimeout(flush, 1500)
 }
 
+// Fetch the server copy of the active plan (for cross-device hydration on load).
+// Returns { plan, prep, servings, updatedAt } or null.
+export async function fetchActivePlan() {
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+    const { data, error } = await supabase
+      .from('active_plans')
+      .select('plan_json, prep_json, servings, updated_at')
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (error || !data) return null
+    return {
+      plan: data.plan_json ?? null,
+      prep: data.prep_json ?? {},
+      servings: data.servings ?? 2,
+      updatedAt: data.updated_at ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
 // Clear the server copy (e.g. on clearPlan).
 export async function clearActivePlan() {
   try {

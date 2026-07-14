@@ -1,11 +1,13 @@
-import { createContext, useContext, useState, useCallback, useRef } from 'react'
+import { createContext, useContext, useState, useCallback, useRef, useEffect } from 'react'
 import { buildWeeklyPlan } from '../lib/mealLogic'
 import { getRecentlyUsedMeals, applyAvoidRepeats, recordMealsUsed } from '../lib/avoidRepeats'
-import { syncActivePlan, clearActivePlan } from '../lib/planSync'
+import { syncActivePlan, clearActivePlan, fetchActivePlan } from '../lib/planSync'
+import { supabase } from '../lib/supabase'
 
 const PlanContext = createContext(null)
 const SERVINGS_KEY = 'mealplan_servings'
 const PLAN_KEY = 'mealplan_active'        // the auto-saved active plan (survives app close)
+const PLAN_TS_KEY = 'mealplan_active_ts'  // last local-edit timestamp (for cross-device newer-wins)
 const PREP_KEY = 'mealplan_active_prep'   // prep checkboxes for the active plan
 
 function loadStoredServings() {
@@ -45,6 +47,41 @@ export function PlanProvider({ children }) {
   const undoTimerRef      = useRef(null)
   const undoGenTimerRef   = useRef(null)
   const dayUndoTimerRef   = useRef(null)
+  const hydratedRef       = useRef(false)
+
+  // ── Cross-device hydration ────────────────────────────────────────
+  // On login, pull the server's active plan. If the server copy is newer
+  // than what's on this device (or this device has no plan), adopt it — so
+  // the same account shows the same plan on phone and laptop.
+  useEffect(() => {
+    let cancelled = false
+    async function hydrate() {
+      const server = await fetchActivePlan()
+      if (cancelled || !server || !server.plan) return
+      const localTs = Number(localStorage.getItem(PLAN_TS_KEY) || 0)
+      const serverTs = server.updatedAt ? new Date(server.updatedAt).getTime() : 0
+      // Adopt server plan if it's newer, or if this device has no local plan.
+      const localPlan = loadStoredPlan()
+      if (!localPlan || serverTs > localTs) {
+        setWeeklyPlan(server.plan)
+        setPrepChecked(server.prep || {})
+        if (server.servings) setServingsRaw(server.servings)
+        try {
+          localStorage.setItem(PLAN_KEY, JSON.stringify(server.plan))
+          localStorage.setItem(PREP_KEY, JSON.stringify(server.prep || {}))
+          localStorage.setItem(PLAN_TS_KEY, String(serverTs || Date.now()))
+        } catch {}
+      }
+    }
+    // Run once when auth is ready, and again whenever the user signs in.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+        if (!hydratedRef.current) { hydratedRef.current = true; hydrate() }
+      }
+      if (event === 'SIGNED_OUT') { hydratedRef.current = false }
+    })
+    return () => { cancelled = true; subscription?.unsubscribe() }
+  }, [])
 
   const setServings = useCallback((n) => {
     const clamped = Math.min(20, Math.max(1, n))
@@ -57,6 +94,7 @@ export function PlanProvider({ children }) {
     try {
       if (plan) localStorage.setItem(PLAN_KEY, JSON.stringify(plan))
       else localStorage.removeItem(PLAN_KEY)
+      localStorage.setItem(PLAN_TS_KEY, String(Date.now()))
     } catch {}
     syncActivePlan({ plan: plan || null, servings })   // mirror to server (debounced)
   }

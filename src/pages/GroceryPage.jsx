@@ -46,7 +46,9 @@ export default function GroceryPage() {
     [profile?.pantry_items],
   )
 
-  const [checked,         setChecked]         = useState({})
+  const [checked,         setChecked]         = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mealplan_grocery_checked') || '{}') } catch { return {} }
+  })
   const [showMeals,       setShowMeals]       = useState(false)
   const [showQuantities,  setShowQuantities]  = useState(true)
   const [selectedPlanId,  setSelectedPlanId]  = useState('')
@@ -127,6 +129,7 @@ export default function GroceryPage() {
 
   useEffect(() => {
     if (weeklyPlan) saveOfflineChecked(checked).catch(() => {})
+    try { localStorage.setItem('mealplan_grocery_checked', JSON.stringify(checked)) } catch {}
   }, [checked])
 
   useEffect(() => {

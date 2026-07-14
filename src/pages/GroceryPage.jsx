@@ -13,7 +13,7 @@ import EmptyState from '../components/ui/EmptyState'
 import {
   ShoppingCart, CheckCircle2, Square,
   Info, Sparkles, ArrowRight, Share2, ChevronDown,
-  ChevronRight, Loader2, WifiOff, Wifi, Check, Plus, X,
+  ChevronRight, Loader2, WifiOff, Wifi, Check, Plus, X, RotateCcw,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -59,18 +59,41 @@ export default function GroceryPage() {
   const [offlinePlan,     setOfflinePlan]     = useState(null)
 
   // ── Customizable list: user-added extras + removed (hidden) items ──
-  const [extraItems,  setExtraItems]  = useState([])   // [{ name, category }]
-  const [removedItems, setRemovedItems] = useState({}) // { ingredientName: true }
+  const [extraItems,  setExtraItems]  = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mealplan_grocery_extra') || '[]') } catch { return [] }
+  })   // [{ name, category }]
+  const [removedItems, setRemovedItems] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('mealplan_grocery_removed') || '{}') } catch { return {} }
+  }) // { ingredientName: true }
   const [newItemName, setNewItemName] = useState('')
 
   const effectivePlan = weeklyPlan || offlinePlan
   const usingOfflineCache = !weeklyPlan && !!offlinePlan
 
   // Reset customizations whenever the underlying plan changes (e.g. regenerate).
+  // Manual edits (added / removed items) persist across meal swaps — we do NOT
+  // wipe them when the plan changes. A swap just recomputes the base list; your
+  // edits and checks ride on top. Use "Reset to plan" to clear edits on demand.
   useEffect(() => {
+    try {
+      localStorage.setItem('mealplan_grocery_extra', JSON.stringify(extraItems))
+      localStorage.setItem('mealplan_grocery_removed', JSON.stringify(removedItems))
+    } catch {}
+  }, [extraItems, removedItems])
+
+  // Reset the list back to exactly what the current plan's meals call for,
+  // discarding manual additions/removals (but keeping the plan itself).
+  function resetToPlanDefault() {
     setExtraItems([])
     setRemovedItems({})
-  }, [weeklyPlan])
+    setChecked({})
+    try {
+      localStorage.removeItem('mealplan_grocery_extra')
+      localStorage.removeItem('mealplan_grocery_removed')
+      localStorage.removeItem('mealplan_grocery_checked')
+    } catch {}
+    toast.success('Grocery list reset to your plan')
+  }
 
   const baseGroceryMap = useMemo(() => effectivePlan ? buildGroceryList(effectivePlan) : {}, [effectivePlan])
 
@@ -240,6 +263,12 @@ export default function GroceryPage() {
               style={{ background: online ? 'var(--brand-light)' : 'rgba(245,158,11,0.1)', color: online ? 'var(--brand-text)' : '#F59E0B', fontSize: 10.5 }}>
               {online ? <Wifi size={10} /> : <WifiOff size={10} />} {online ? 'Synced' : 'Offline'}
             </span>
+            {(extraItems.length > 0 || Object.keys(removedItems).length > 0) && (
+              <button onClick={resetToPlanDefault} className="btn-secondary btn-sm btn gap-1.5 tap-target no-print"
+                title="Discard your added/removed items and rebuild from the current plan">
+                <RotateCcw size={13} /> Reset to plan
+              </button>
+            )}
             <button onClick={handleShare} disabled={sharing} className="btn-primary btn-sm btn gap-1.5 tap-target">
               {sharing ? <Loader2 size={14} className="animate-[spin_1s_linear_infinite]" /> : <Share2 size={14} />} Share list
             </button>

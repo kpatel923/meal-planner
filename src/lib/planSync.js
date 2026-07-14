@@ -15,17 +15,18 @@ async function flush() {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
-    await supabase.from('active_plans').upsert({
-      user_id: user.id,
-      plan_json: data.plan ?? null,
-      prep_json: data.prep ?? {},
-      servings: data.servings ?? 2,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' })
+    // Only write the fields that were actually provided, so a grocery-only
+    // update never clobbers the plan (and vice-versa).
+    const row = { user_id: user.id, updated_at: new Date().toISOString() }
+    if ('plan' in data)     row.plan_json = data.plan ?? null
+    if ('prep' in data)     row.prep_json = data.prep ?? {}
+    if ('servings' in data) row.servings = data.servings ?? 2
+    if ('grocery' in data)  row.grocery_json = data.grocery ?? null
+    await supabase.from('active_plans').upsert(row, { onConflict: 'user_id' })
   } catch { /* non-critical */ }
 }
 
-// Call on any plan/prep/servings change. Coalesces rapid changes into one write.
+// Call on any plan/prep/servings/grocery change. Coalesces rapid changes.
 export function syncActivePlan(partial) {
   pending = { ...(pending || {}), ...partial }
   if (timer) clearTimeout(timer)
@@ -33,14 +34,14 @@ export function syncActivePlan(partial) {
 }
 
 // Fetch the server copy of the active plan (for cross-device hydration on load).
-// Returns { plan, prep, servings, updatedAt } or null.
+// Returns { plan, prep, servings, grocery, updatedAt } or null.
 export async function fetchActivePlan() {
   try {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
     const { data, error } = await supabase
       .from('active_plans')
-      .select('plan_json, prep_json, servings, updated_at')
+      .select('plan_json, prep_json, servings, grocery_json, updated_at')
       .eq('user_id', user.id)
       .maybeSingle()
     if (error || !data) return null
@@ -48,6 +49,7 @@ export async function fetchActivePlan() {
       plan: data.plan_json ?? null,
       prep: data.prep_json ?? {},
       servings: data.servings ?? 2,
+      grocery: data.grocery_json ?? null,
       updatedAt: data.updated_at ?? null,
     }
   } catch {

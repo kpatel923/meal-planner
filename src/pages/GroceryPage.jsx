@@ -8,6 +8,7 @@ import { groupGroceryByCategory, GROCERY_CATEGORY_ORDER, estimateQuantity } from
 import { buildGroceryShareText, shareText } from '../lib/sharing'
 import { saveForOffline, loadOfflineData, saveOfflineChecked, isOnline } from '../lib/offline'
 import { tapHaptic } from '../lib/haptics'
+import { syncActivePlan, fetchActivePlan } from '../lib/planSync'
 import PageHeader from '../components/planner/PageHeader'
 import EmptyState from '../components/ui/EmptyState'
 import {
@@ -71,14 +72,32 @@ export default function GroceryPage() {
   const usingOfflineCache = !weeklyPlan && !!offlinePlan
 
   // Reset customizations whenever the underlying plan changes (e.g. regenerate).
-  // Manual edits (added / removed items) persist across meal swaps — we do NOT
-  // wipe them when the plan changes. A swap just recomputes the base list; your
-  // edits and checks ride on top. Use "Reset to plan" to clear edits on demand.
+  // On load, pull grocery edits from the server so they match across devices.
+  // Runs once; server is the source of truth for cross-device consistency.
+  const [groceryHydrated, setGroceryHydrated] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    async function hydrate() {
+      const server = await fetchActivePlan()
+      if (cancelled || !server?.grocery) { setGroceryHydrated(true); return }
+      const g = server.grocery
+      if (Array.isArray(g.extra)) setExtraItems(g.extra)
+      if (g.removed && typeof g.removed === 'object') setRemovedItems(g.removed)
+      if (g.checked && typeof g.checked === 'object') setChecked(g.checked)
+      setGroceryHydrated(true)
+    }
+    hydrate()
+    return () => { cancelled = true }
+  }, [])
+
+  // Persist manual edits locally AND sync to the server (so grocery edits carry
+  // across devices, like the plan does).
   useEffect(() => {
     try {
       localStorage.setItem('mealplan_grocery_extra', JSON.stringify(extraItems))
       localStorage.setItem('mealplan_grocery_removed', JSON.stringify(removedItems))
     } catch {}
+    if (groceryHydrated) syncActivePlan({ grocery: { extra: extraItems, removed: removedItems, checked } })
   }, [extraItems, removedItems])
 
   // Reset the list back to exactly what the current plan's meals call for,
@@ -153,6 +172,7 @@ export default function GroceryPage() {
   useEffect(() => {
     if (weeklyPlan) saveOfflineChecked(checked).catch(() => {})
     try { localStorage.setItem('mealplan_grocery_checked', JSON.stringify(checked)) } catch {}
+    if (groceryHydrated) syncActivePlan({ grocery: { extra: extraItems, removed: removedItems, checked } })
   }, [checked])
 
   useEffect(() => {

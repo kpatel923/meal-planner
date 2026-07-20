@@ -69,9 +69,14 @@ export default function MealRow({
             <span style={{ color: accent ? 'var(--accent-text)' : 'var(--accent-dark)' }}>{category}</span>
             {facts.prepTime != null && <span style={{ color: 'var(--text-3)', fontWeight: 500 }}> · {facts.prepTime} min</span>}
           </p>
-          <p className="font-display truncate"
+          <p className="font-display truncate flex items-center gap-1.5"
             style={{ fontSize: 15.5, fontWeight: 600, letterSpacing: '-0.01em', color: 'var(--text)', textDecoration: prepped ? 'line-through' : 'none', textDecorationColor: 'var(--text-3)' }}>
             {meal.item_name}
+            {meal.needs_details && (
+              <span className="shrink-0" style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#B4820E', background: 'rgba(245,180,20,0.15)', padding: '1px 6px', borderRadius: 99, border: '1px solid rgba(245,180,20,0.3)' }}>
+                Draft
+              </span>
+            )}
           </p>
         </div>
       </button>

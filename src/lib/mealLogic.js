@@ -39,6 +39,22 @@ export function isEatingOut(meal) {
   return !!meal && (meal.isEatingOut === true || meal.id === EATING_OUT_ID)
 }
 
+// Leftovers — a no-cook placeholder like eating-out, for using up a prior meal.
+export const LEFTOVERS_ID = '__leftovers__'
+export function makeLeftoversMeal(category) {
+  return {
+    id: LEFTOVERS_ID,
+    item_name: 'Leftovers',
+    category,
+    ingredients: '',
+    diet_type: 'veg',
+    isLeftovers: true,
+  }
+}
+export function isLeftovers(meal) {
+  return !!meal && (meal.isLeftovers === true || meal.id === LEFTOVERS_ID)
+}
+
 // Parse comma-separated ingredient string into a cleaned array
 export function parseIngredients(ingredientString) {
   if (!ingredientString) return []

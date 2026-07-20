@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
+import { useLocation } from 'react-router-dom'
 import { useMeals } from '../hooks/useMeals'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -95,6 +96,21 @@ export default function RecipesPage() {
   }
   function closeForm()     { setShowForm(false); setEditMeal(null); setForm(EMPTY); setShowDetect(false); setDetectUrl('') }
   function setField(k, v)  { setForm(p => ({ ...p, [k]:v })) }
+
+  // If we arrived here from "Create recipe" in the planner swap, open the editor
+  // for that freshly-created recipe so the user can fill in details right away.
+  const location = useLocation()
+  useEffect(() => {
+    const editId = location.state?.editMealId
+    if (editId && meals.length) {
+      const target = meals.find(m => m.id === editId)
+      if (target) {
+        openEdit(target)
+        // Clear the navigation state so it doesn't re-open on back/refresh.
+        window.history.replaceState({}, '')
+      }
+    }
+  }, [location.state, meals])
 
   // Warn if the typed name closely matches an existing recipe (avoid duplicates).
   // Skips the check while editing an existing meal.
@@ -239,6 +255,7 @@ export default function RecipesPage() {
       written_url:  form.written_url.trim() || null,
       detail_notes: form.detail_notes.trim() || null,
       photo_url:    form.photo_url || null,
+      needs_details: false,   // saving with details clears the draft flag
     }
     if (!editMeal) payload.source = 'manual'
     editMeal ? await updateMeal(editMeal.id, payload) : await addMeal(payload)

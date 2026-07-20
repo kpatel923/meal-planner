@@ -4,7 +4,7 @@ import { useMeals } from '../hooks/useMeals'
 import { usePlans } from '../hooks/usePlans'
 import { useAuth } from '../hooks/useAuth'
 import { usePlanStore } from '../hooks/usePlanStore'
-import { DAYS, CATEGORIES, makeEatingOutMeal, isEatingOut } from '../lib/mealLogic'
+import { DAYS, CATEGORIES, makeEatingOutMeal, isEatingOut, makeLeftoversMeal } from '../lib/mealLogic'
 import {
   buildPlanShareText, buildGroceryShareText, buildShareableURL, shareText,
 } from '../lib/sharing'
@@ -25,7 +25,7 @@ import {
   WeekOverview, PanelSection,
 } from '../components/planner/PlannerPanels'
 import {
-  Save, Loader2, Sparkles, X, ArrowLeftRight, RotateCcw,
+  Save, Loader2, Sparkles, X, ArrowLeftRight, ArrowRight, RotateCcw,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
   CalendarPlus, RefreshCw, BarChart3, Plus,
   Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, ChevronLeft, ChevronDown,
@@ -88,7 +88,7 @@ export default function PlannerPage() {
   const [mobileSheet,    setMobileSheet]    = useState(null) // 'overview' | 'grocery' | 'ai' | 'actions' | null
 
   // Single meals fetch — filter client-side instead of a second query.
-  const { meals: allMeals, loading: mealsLoading, toggleFavorite, bulkAddMeals } = useMeals()
+  const { meals: allMeals, loading: mealsLoading, toggleFavorite, bulkAddMeals, addMeal } = useMeals()
   const filteredMeals = useMemo(
     () => allMeals.filter(m => dietTypes.includes(m.diet_type)),
     [allMeals, dietTypes],
@@ -257,6 +257,30 @@ export default function PlannerPage() {
   }
   function closeSwap() { setSwapTarget(null); setSwapSearch('') }
 
+  // Create a new (flagged-incomplete) recipe from the typed search text, drop it
+  // straight into the slot, then open its editor on the Recipes page so the user
+  // can fill in details. Lets you add meals fast while planning and flesh them
+  // out later — the recipe carries a "needs details" flag until then.
+  async function handleCreateFromSearch() {
+    if (!swapTarget) return
+    const name = swapSearch.trim()
+    if (!name) return
+    const { data, error } = await addMeal({
+      item_name: name,
+      category: swapTarget.category,
+      diet_type: 'veg',
+      ingredients: '',
+      needs_details: true,
+      source: 'manual',
+    })
+    if (error || !data) { toast.error('Could not create recipe'); return }
+    swapMeal(swapTarget.dayIdx, swapTarget.category, data)
+    closeSwap()
+    toast.success(`Added "${name}" — add details when ready`, { icon: '📝' })
+    // Open the editor for this new recipe on the Recipes page.
+    navigate('/recipes', { state: { editMealId: data.id } })
+  }
+
   function handleSwapSelect(meal) {
     if (!swapTarget) return
     const wasEmpty = !weeklyPlan?.[swapTarget.dayIdx]?.[swapTarget.category]
@@ -273,6 +297,13 @@ export default function PlannerPage() {
     closeSwap()
   }
 
+  function handleLeftovers() {
+    if (!swapTarget) return
+    swapMeal(swapTarget.dayIdx, swapTarget.category, makeLeftoversMeal(swapTarget.category))
+    toast.success('Marked as leftovers', { icon: '🥡' })
+    closeSwap()
+  }
+
   function handleSurpriseMe() {
     if (!swapTarget) return
     const pool = filteredMeals.filter(m => m.category === swapTarget.category)
@@ -285,23 +316,47 @@ export default function PlannerPage() {
 
   function handleShare(type) { setShareType(type); setShowShareModal(true) }
 
-  const swapMeals = useMemo(() => {
-    if (!swapTarget) return []
-    const q = swapSearch.toLowerCase()
-    const matches = allMeals.filter(m =>
-      m.category === swapTarget.category &&
-      m.item_name.toLowerCase().includes(q))
-    // Dedupe by normalized name so duplicate library rows (e.g. from a
-    // re-import) only appear once in the swap picker.
-    const seen = new Set()
-    const unique = []
-    for (const m of matches) {
-      const key = m.item_name.trim().toLowerCase()
-      if (seen.has(key)) continue
-      seen.add(key)
-      unique.push(m)
+  // Swap picker results, split into the tapped category (priority) and a
+  // fallback of other categories. The fallback only appears when the tapped
+  // category has few matches — so lunch stays lunch-first, but the rest of the
+  // library is reachable when lunch comes up short. Recipes keep their own
+  // category; they just occupy the slot.
+  const FALLBACK_THRESHOLD = 2   // show "Other meals" when primary has <= this many
+  const swapGroups = useMemo(() => {
+    if (!swapTarget) return { primary: [], fallback: [] }
+    const q = swapSearch.trim().toLowerCase()
+
+    const dedupe = (list) => {
+      const seen = new Set()
+      const out = []
+      for (const m of list) {
+        const key = m.item_name.trim().toLowerCase()
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push(m)
+      }
+      return out
     }
-    return unique
+
+    const matchesSearch = (m) => !q || m.item_name.toLowerCase().includes(q)
+
+    // Primary: the tapped category.
+    const primary = dedupe(
+      allMeals.filter(m => m.category === swapTarget.category && matchesSearch(m))
+    )
+
+    // Fallback: other categories — only surfaced when primary is thin.
+    let fallback = []
+    if (primary.length <= FALLBACK_THRESHOLD) {
+      fallback = dedupe(
+        allMeals.filter(m => m.category !== swapTarget.category && matchesSearch(m))
+      )
+      // Don't let a name that already appears in primary repeat in fallback.
+      const primaryNames = new Set(primary.map(m => m.item_name.trim().toLowerCase()))
+      fallback = fallback.filter(m => !primaryNames.has(m.item_name.trim().toLowerCase()))
+    }
+
+    return { primary, fallback }
   }, [swapTarget, swapSearch, allMeals])
 
   const stats = useMemo(() => {
@@ -766,6 +821,20 @@ export default function PlannerPage() {
                 <p style={{ fontSize: 12, color: 'var(--text-3)' }}>No cooking — skips grocery, time &amp; cost</p>
               </div>
             </button>
+            {/* Leftovers — quick no-cook option, reuse a prior meal */}
+            <button onClick={handleLeftovers}
+              className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
+              style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'var(--surface)'}>
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                🥡
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold" style={{ fontSize: 15, color: 'var(--text)' }}>Leftovers</p>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>No cooking — skips grocery, time &amp; cost</p>
+              </div>
+            </button>
             <button onClick={handleSurpriseMe}
               className="w-full flex items-center gap-3 px-6 py-3.5 text-left transition-all"
               style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}
@@ -780,32 +849,85 @@ export default function PlannerPage() {
               </div>
             </button>
             <div className="overflow-y-auto flex-1">
-              {swapMeals.length === 0 ? (
-                <div className="py-10 text-center" style={{ color: 'var(--text-3)', fontSize: 14 }}>No meals found</div>
-              ) : swapMeals.map(meal => {
-                const isCurrent = weeklyPlan?.[swapTarget.dayIdx]?.[swapTarget.category]?.id === meal.id
-                return (
-                  <button key={meal.id} onClick={() => handleSwapSelect(meal)}
-                    className="w-full flex items-start gap-4 px-6 py-4 text-left transition-all group"
-                    style={{ borderBottom: '1px solid var(--border)', background: isCurrent ? 'var(--brand-light)' : 'transparent' }}
-                    onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--surface-2)' }}
-                    onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}>
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                      {CAT_STYLES[meal.category]?.icon}
+              {(() => {
+                const renderRow = (meal, showCatTag) => {
+                  const isCurrent = weeklyPlan?.[swapTarget.dayIdx]?.[swapTarget.category]?.id === meal.id
+                  return (
+                    <button key={meal.id} onClick={() => handleSwapSelect(meal)}
+                      className="w-full flex items-start gap-4 px-6 py-4 text-left transition-all group"
+                      style={{ borderBottom: '1px solid var(--border)', background: isCurrent ? 'var(--accent-light)' : 'transparent' }}
+                      onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = 'var(--surface-2)' }}
+                      onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = 'transparent' }}>
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style={{ background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                        {CAT_STYLES[meal.category]?.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold truncate" style={{ fontSize: 15, color: 'var(--text)' }}>{meal.item_name}</p>
+                          {isCurrent && <span className="badge" style={{ fontSize: 9, background: 'var(--accent-light)', color: 'var(--accent-text)', border: '1px solid var(--accent-light)' }}>Current</span>}
+                          {showCatTag && (
+                            <span className="badge" style={{ fontSize: 9, background: 'var(--surface-2)', color: 'var(--text-3)', border: '1px solid var(--border)' }}>
+                              {meal.category}
+                            </span>
+                          )}
+                        </div>
+                        <p className="truncate mt-0.5" style={{ fontSize: 12, color: 'var(--text-3)' }}>
+                          {meal.ingredients?.split(',').slice(0, 3).map(i => i.trim()).join(' · ')}
+                        </p>
+                      </div>
+                      <ArrowLeftRight size={16} className="shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--accent)' }} />
+                    </button>
+                  )
+                }
+
+                const { primary, fallback } = swapGroups
+                const q = swapSearch.trim()
+                const exactExists = q && [...primary, ...fallback].some(
+                  m => m.item_name.trim().toLowerCase() === q.toLowerCase()
+                )
+                const createRow = q && !exactExists ? (
+                  <button onClick={handleCreateFromSearch}
+                    className="w-full flex items-center gap-4 px-6 py-4 text-left transition-all"
+                    style={{ borderBottom: '1px solid var(--border)', background: 'var(--accent-light)' }}>
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'var(--accent)', color: '#1A1C16' }}>
+                      <Plus size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold truncate" style={{ fontSize: 15, color: 'var(--text)' }}>{meal.item_name}</p>
-                        {isCurrent && <span className="badge" style={{ fontSize: 9, background: 'var(--brand-light)', color: 'var(--brand-text)', border: '1px solid var(--brand-light)' }}>Current</span>}
-                      </div>
-                      <p className="truncate mt-0.5" style={{ fontSize: 12, color: 'var(--text-3)' }}>
-                        {meal.ingredients?.split(',').slice(0, 3).map(i => i.trim()).join(' · ')}
-                      </p>
+                      <p className="font-semibold truncate" style={{ fontSize: 15, color: 'var(--text)' }}>Create “{q}”</p>
+                      <p style={{ fontSize: 12, color: 'var(--accent-text)' }}>Add it now, fill in details after</p>
                     </div>
-                    <ArrowLeftRight size={16} className="shrink-0 mt-1 opacity-0 group-hover:opacity-100 transition-opacity" style={{ color: 'var(--brand)' }} />
+                    <ArrowRight size={16} className="shrink-0" style={{ color: 'var(--accent-dark)' }} />
                   </button>
+                ) : null
+
+                if (primary.length === 0 && fallback.length === 0) {
+                  return createRow || <div className="py-10 text-center" style={{ color: 'var(--text-3)', fontSize: 14 }}>No meals found</div>
+                }
+
+                const sectionHeader = (label) => (
+                  <div className="px-6 pt-3 pb-1.5" style={{ background: 'var(--surface)', position: 'sticky', top: 0, zIndex: 1 }}>
+                    <p style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--text-3)' }}>{label}</p>
+                  </div>
                 )
-              })}
+
+                return (
+                  <>
+                    {primary.length > 0 && (
+                      <>
+                        {fallback.length > 0 && sectionHeader(swapTarget.category)}
+                        {primary.map(m => renderRow(m, false))}
+                      </>
+                    )}
+                    {fallback.length > 0 && (
+                      <>
+                        {sectionHeader('Other meals')}
+                        {fallback.map(m => renderRow(m, true))}
+                      </>
+                    )}
+                    {createRow}
+                  </>
+                )
+              })()}
             </div>
           </div>
         </div>

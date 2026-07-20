@@ -43,7 +43,7 @@ export function useMeals(filters = {}) {
   useEffect(() => { fetchMeals() }, [fetchMeals])
 
   // ── CRUD ─────────────────────────────────────────────────────
-  async function addMeal(mealData) {
+  async function addMeal(mealData, opts = {}) {
     const { data, error } = await supabase
       .from('meals')
       .insert({ ...mealData, user_id: user.id })
@@ -51,11 +51,11 @@ export function useMeals(filters = {}) {
       .single()
 
     if (error) {
-      toast.error('Failed to add meal')
+      if (!opts.silent) toast.error('Failed to add meal')
       return { error }
     }
     setMeals(prev => [...prev, data].sort((a, b) => a.item_name.localeCompare(b.item_name)))
-    toast.success(`${data.item_name} added!`)
+    if (!opts.silent) toast.success(`${data.item_name} added!`)
     return { data }
   }
 

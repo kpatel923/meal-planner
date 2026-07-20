@@ -265,20 +265,29 @@ export default function PlannerPage() {
     if (!swapTarget) return
     const name = swapSearch.trim()
     if (!name) return
-    const { data, error } = await addMeal({
+    const base = {
       item_name: name,
       category: swapTarget.category,
       diet_type: 'veg',
       ingredients: '',
-      needs_details: true,
       source: 'manual',
-    })
+    }
+    // Try to flag it as a draft; if the needs_details column doesn't exist yet,
+    // fall back to creating it without the flag so the feature still works.
+    // Silent so addMeal's own toasts don't fire — we show our own below.
+    let { data, error } = await addMeal({ ...base, needs_details: true }, { silent: true })
+    if (error) {
+      const res = await addMeal(base, { silent: true })
+      data = res.data; error = res.error
+    }
     if (error || !data) { toast.error('Could not create recipe'); return }
     swapMeal(swapTarget.dayIdx, swapTarget.category, data)
     closeSwap()
     toast.success(`Added "${name}" — add details when ready`, { icon: '📝' })
-    // Open the editor for this new recipe on the Recipes page.
-    navigate('/recipes', { state: { editMealId: data.id } })
+    // Open the editor for this new recipe on the Recipes page, and tell it to
+    // return here (the planner) when the editor closes — since the user started
+    // this from the weekly plan, not the recipes page.
+    navigate('/recipes', { state: { editMealId: data.id, returnTo: '/planner' } })
   }
 
   function handleSwapSelect(meal) {

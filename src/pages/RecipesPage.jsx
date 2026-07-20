@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useMeals } from '../hooks/useMeals'
 import { useAuth } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
@@ -94,17 +94,29 @@ export default function RecipesPage() {
     setDetectUrl('')
     setShowForm(true)
   }
-  function closeForm()     { setShowForm(false); setEditMeal(null); setForm(EMPTY); setShowDetect(false); setDetectUrl('') }
+  // When the editor was opened from another page (e.g. the planner's "create
+  // recipe"), remember where to go back to so closing the editor returns there.
+  const location = useLocation()
+  const navigate = useNavigate()
+  const returnToRef = useRef(null)
+  function closeForm() {
+    setShowForm(false); setEditMeal(null); setForm(EMPTY); setShowDetect(false); setDetectUrl('')
+    if (returnToRef.current) {
+      const dest = returnToRef.current
+      returnToRef.current = null
+      navigate(dest)
+    }
+  }
   function setField(k, v)  { setForm(p => ({ ...p, [k]:v })) }
 
   // If we arrived here from "Create recipe" in the planner swap, open the editor
   // for that freshly-created recipe so the user can fill in details right away.
-  const location = useLocation()
   useEffect(() => {
     const editId = location.state?.editMealId
     if (editId && meals.length) {
       const target = meals.find(m => m.id === editId)
       if (target) {
+        returnToRef.current = location.state?.returnTo || null
         openEdit(target)
         // Clear the navigation state so it doesn't re-open on back/refresh.
         window.history.replaceState({}, '')

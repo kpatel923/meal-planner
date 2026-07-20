@@ -828,7 +828,7 @@ export default function PlannerPage() {
 
       {/* ════════ Swap modal ════════ */}
       {swapTarget && (
-        <div className="app-modal modal-safe"
+        <div className="app-modal app-modal-center modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && closeSwap()}>
           <div className="app-modal-card" style={{ maxHeight: '82dvh' }}>
@@ -845,7 +845,7 @@ export default function PlannerPage() {
             </div>
             <div className="px-5 py-3.5" style={{ borderBottom: '1px solid var(--border)' }}>
               <input className="input" placeholder={`Search ${swapTarget.category} meals…`}
-                value={swapSearch} onChange={e => setSwapSearch(e.target.value)} autoFocus />
+                value={swapSearch} onChange={e => setSwapSearch(e.target.value)} />
             </div>
             {/* Eating out — quick option, no cooking */}
             <button onClick={handleEatingOut}
@@ -975,7 +975,7 @@ export default function PlannerPage() {
 
       {/* ════════ Inline edit meal (from the plan modal) ════════ */}
       {editInline && (
-        <div className="app-modal modal-safe" style={{ zIndex: 75 }}
+        <div className="app-modal app-modal-center modal-safe" style={{ zIndex: 75 }}
           onClick={e => e.target === e.currentTarget && !savingInline && setEditInline(null)}>
           <div className="app-modal-card" style={{ padding: 22, maxHeight: '86dvh', overflowY: 'auto' }}>
             <div className="flex items-center gap-2.5 mb-4">
@@ -1042,7 +1042,7 @@ export default function PlannerPage() {
 
       {/* ════════ Quick-create meal (name + category + diet) ════════ */}
       {quickCreate && (
-        <div className="app-modal modal-safe" style={{ zIndex: 75 }}
+        <div className="app-modal app-modal-center modal-safe" style={{ zIndex: 75 }}
           onClick={e => e.target === e.currentTarget && !quickCreating && setQuickCreate(null)}>
           <div className="app-modal-card" style={{ padding: 22 }}>
             <div className="flex items-center gap-2.5 mb-4">
@@ -1158,7 +1158,7 @@ export default function PlannerPage() {
 
       {/* ════════ Dessert picker ════════ */}
       {dessertPickerDay !== null && (
-        <div className="app-modal modal-safe"
+        <div className="app-modal app-modal-center modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && setDessertPickerDay(null)}>
           <div className="app-modal-card" style={{ maxHeight: '85dvh', overflowY: 'auto' }}>

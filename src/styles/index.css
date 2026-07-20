@@ -495,6 +495,25 @@
 }
 @media (min-width: 640px) { .app-modal-grip { display: none; } }
 
+/* Centered floating variant — pops up and scales on ALL screen sizes (not a
+   bottom sheet). Use for pickers like swap/add where a floating dialog reads
+   better than a docked sheet. */
+.app-modal-center {
+  align-items: center;
+  padding: 16px;
+}
+.app-modal-center > .app-modal-card {
+  width: 100%;
+  max-width: 440px;
+  max-height: 82dvh;
+  border: 1px solid var(--hairline);
+  border-radius: 22px;
+  box-shadow: 0 24px 60px rgba(22,23,15,0.22);
+  padding-bottom: 0;
+  animation: modalIn 0.28s cubic-bezier(0.22,1,0.36,1) both;
+}
+.dark .app-modal-center > .app-modal-card { box-shadow: 0 24px 60px rgba(0,0,0,0.55); }
+
 /* ── VISUAL REFRESH: cohesive micro-interactions ──────────────── */
 /* Universal press feedback: any element with .press dips slightly when tapped */
 .press { transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1); }

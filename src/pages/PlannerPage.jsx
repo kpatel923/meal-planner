@@ -828,10 +828,10 @@ export default function PlannerPage() {
 
       {/* ════════ Swap modal ════════ */}
       {swapTarget && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+        <div className="app-modal modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && closeSwap()}>
-          <div className="w-full max-w-md card flex flex-col" style={{ maxHeight: '82dvh', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="app-modal-card" style={{ maxHeight: '82dvh' }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
               <div>
                 <p style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
@@ -975,10 +975,9 @@ export default function PlannerPage() {
 
       {/* ════════ Inline edit meal (from the plan modal) ════════ */}
       {editInline && (
-        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center p-4 modal-safe"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+        <div className="app-modal modal-safe" style={{ zIndex: 75 }}
           onClick={e => e.target === e.currentTarget && !savingInline && setEditInline(null)}>
-          <div className="w-full max-w-sm card flex flex-col" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)', padding: 22, maxHeight: '86dvh', overflowY: 'auto' }}>
+          <div className="app-modal-card" style={{ padding: 22, maxHeight: '86dvh', overflowY: 'auto' }}>
             <div className="flex items-center gap-2.5 mb-4">
               <div className="flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent-light)' }}>
                 <Edit2 size={18} style={{ color: 'var(--accent-dark)' }} />
@@ -1043,10 +1042,9 @@ export default function PlannerPage() {
 
       {/* ════════ Quick-create meal (name + category + diet) ════════ */}
       {quickCreate && (
-        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center p-4 modal-safe"
-          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+        <div className="app-modal modal-safe" style={{ zIndex: 75 }}
           onClick={e => e.target === e.currentTarget && !quickCreating && setQuickCreate(null)}>
-          <div className="w-full max-w-sm card flex flex-col" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)', padding: 22 }}>
+          <div className="app-modal-card" style={{ padding: 22 }}>
             <div className="flex items-center gap-2.5 mb-4">
               <div className="flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent-light)' }}>
                 <Plus size={19} style={{ color: 'var(--accent-dark)' }} />
@@ -1107,10 +1105,10 @@ export default function PlannerPage() {
 
       {/* ════════ Move meal modal ════════ */}
       {moveTarget && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+        <div className="app-modal modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && setMoveTarget(null)}>
-          <div className="w-full max-w-md card flex flex-col" style={{ maxHeight: '82dvh', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="app-modal-card" style={{ maxHeight: '82dvh' }}>
             <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
               <div>
                 <p style={{ fontSize: 12, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
@@ -1160,10 +1158,10 @@ export default function PlannerPage() {
 
       {/* ════════ Dessert picker ════════ */}
       {dessertPickerDay !== null && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+        <div className="app-modal modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && setDessertPickerDay(null)}>
-          <div className="w-full max-w-md card" style={{ maxHeight: '85dvh', overflowY: 'auto', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="app-modal-card" style={{ maxHeight: '85dvh', overflowY: 'auto' }}>
             <div className="flex items-center justify-between px-6 pt-6 pb-1">
               <h3 className="font-display font-semibold flex items-center gap-2" style={{ fontSize: 20, color: 'var(--text)', letterSpacing: '-0.02em' }}>
                 🍰 Add a dessert
@@ -1220,10 +1218,10 @@ export default function PlannerPage() {
 
       {/* ════════ Tune this plan (macro targeting) ════════ */}
       {showTune && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+        <div className="app-modal modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && setShowTune(false)}>
-          <div className="w-full max-w-md card" style={{ maxHeight: '85dvh', overflowY: 'auto', animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="app-modal-card" style={{ maxHeight: '85dvh', overflowY: 'auto' }}>
             <div className="flex items-center justify-between px-6 pt-6 pb-1">
               <div className="flex items-center gap-2.5">
                 <div className="flex items-center justify-center rounded-2xl" style={{ width: 40, height: 40, background: 'var(--brand-light)' }}>
@@ -1343,10 +1341,10 @@ export default function PlannerPage() {
 
       {/* ════════ Regenerate confirmation ════════ */}
       {showRegenModal && (
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+        <div className="app-modal modal-safe"
           style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
           onClick={e => e.target === e.currentTarget && setShowRegenModal(false)}>
-          <div className="w-full max-w-md card" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+          <div className="app-modal-card">
             <div className="px-6 pt-6 pb-2">
               <div className="flex items-center justify-center rounded-2xl mb-4"
                 style={{ width: 48, height: 48, background: 'var(--brand-light)' }}>
@@ -1575,10 +1573,10 @@ function ShareModal({ weeklyPlan, username, servings = 1, onClose, initialTab })
   const activeText = tab === 'plan' ? planText : groceryText
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+    <div className="app-modal modal-safe"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-lg card" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)', maxHeight: '85dvh', display: 'flex', flexDirection: 'column' }}>
+      <div className="app-modal-card" style={{ maxHeight: '85dvh', display: 'flex', flexDirection: 'column' }}>
         <div className="flex items-center justify-between px-6 py-5" style={{ borderBottom: '1px solid var(--border)' }}>
           <div>
             <h3 className="font-display font-semibold" style={{ fontSize: 21, color: 'var(--text)', letterSpacing: '-0.03em' }}>Share</h3>

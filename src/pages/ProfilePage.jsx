@@ -8,7 +8,8 @@ import { usePlanStore } from '../hooks/usePlanStore'
 import { exportMealsAsJSON, exportMealsAsCSV } from '../lib/importExport'
 import { getMostUsedMeals } from '../lib/avoidRepeats'
 import { weeklyBudgetTotal, budgetToTier, formatCost, BUDGET_TAG_STYLES } from '../lib/budget'
-import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, DollarSign, Award, Trash2, Package, Target, Plus, Flame, Bell } from 'lucide-react'
+import { User, Mail, Shield, Download, LogOut, Save, Loader2, Pencil, Check, X, Sun, Moon, BookOpen, Bookmark, Calendar, Users, DollarSign, Award, Trash2, Package, Target, Plus, Flame, Bell, ZoomIn } from 'lucide-react'
+import { isZoomAllowed, setZoomAllowed } from '../lib/zoomPref'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 
@@ -27,6 +28,7 @@ export default function ProfilePage() {
   const navigate   = useNavigate()
 
   const [editingName,  setEditingName]  = useState(false)
+  const [allowZoom,    setAllowZoom]    = useState(isZoomAllowed())
   const [nameValue,    setNameValue]    = useState(profile?.username || '')
   const [savingName,   setSavingName]   = useState(false)
   const [savingPrefs,  setSavingPrefs]  = useState(false)
@@ -388,6 +390,27 @@ export default function ProfilePage() {
           {savingBudget ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
           Save budget settings
         </button>
+      </div>
+
+      {/* ── Display: pinch-zoom ───────────────────────── */}
+      <div className="card p-6 mb-5" style={{ animation: 'slideUp 0.4s ease 0.19s both' }}>
+        <div className="flex items-center justify-between">
+          <div className="flex-1 pr-4">
+            <h3 className="font-semibold flex items-center gap-2 mb-1" style={{ fontSize: '16px', color: 'var(--text)' }}>
+              <ZoomIn size={16} style={{ color: 'var(--brand)' }} /> Allow pinch-zoom
+            </h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-3)' }}>
+              Off by default for an app-like feel. Turn on if you'd like to pinch to zoom the screen.
+            </p>
+          </div>
+          <button onClick={() => { const next = !allowZoom; setAllowZoom(next); setZoomAllowed(next) }}
+            role="switch" aria-checked={allowZoom} aria-label="Allow pinch zoom"
+            className="relative rounded-full transition-all duration-300 shrink-0"
+            style={{ width: '52px', height: '30px', background: allowZoom ? 'var(--brand)' : 'var(--border)', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <span className="absolute rounded-full bg-white shadow-md transition-transform duration-300"
+              style={{ width: '24px', height: '24px', top: '3px', left: '3px', transform: allowZoom ? 'translateX(22px)' : 'translateX(0)' }} />
+          </button>
+        </div>
       </div>
 
       {/* ── Pantry staples ────────────────────────────── */}

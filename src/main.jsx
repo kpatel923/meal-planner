@@ -2,6 +2,10 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import './styles/index.css'
+import { applyZoomPref } from './lib/zoomPref'
+
+// Apply the saved zoom preference (default: no zoom, app-like) before render.
+applyZoomPref()
 
 // Global error boundary — catches crashes and shows them instead of blank screen
 class ErrorBoundary extends React.Component {

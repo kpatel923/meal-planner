@@ -299,10 +299,10 @@ function EmptyToday({ onGenerate }) {
 function StreakSheet({ streak, weekDays, onClose }) {
   const toBeat = Math.max(0, streak.best - streak.current)
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
+    <div className="app-modal modal-safe"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="w-full max-w-sm card p-6" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)' }}>
+      <div className="app-modal-card" style={{ padding: 24 }}>
         <div className="text-center mb-5">
           <Flame size={46} style={{ color: '#E8730C', margin: '0 auto' }} />
           <p className="font-display font-extrabold" style={{ fontSize: 34, letterSpacing: '-0.03em', color: 'var(--text)', lineHeight: 1, marginTop: 4 }}>

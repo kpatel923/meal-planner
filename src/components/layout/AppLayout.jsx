@@ -46,6 +46,9 @@ export default function AppLayout() {
   function handleOnboardingComplete() {
     try { localStorage.setItem(ONBOARDING_DISMISS_KEY, 'true') } catch {}
     setDismissedOnboarding(true)
+    // Land on the planner so they can generate their first week immediately
+    // (their starter recipes are now in the library).
+    navigate('/planner')
   }
 
   const [moreOpen, setMoreOpen] = useState(false)

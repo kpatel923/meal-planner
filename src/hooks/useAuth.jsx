@@ -9,14 +9,6 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   // ── Seed default meals for brand new users ──────────────────
-  async function seedMealsForNewUser(userId) {
-    // Auto-seeding of starter recipes is disabled: users curate their own
-    // library (via manual add, AI autofill, or CSV import). A wiped or new
-    // account stays empty until the user adds recipes, avoiding conflicts
-    // with imported libraries.
-    return
-  }
-
   // ── Fetch profile ───────────────────────────────────────────
   async function fetchProfile(userId) {
     const { data } = await supabase
@@ -45,7 +37,6 @@ export function AuthProvider({ children }) {
         finish()
         if (u) {
           fetchProfile(u.id).catch(() => {})
-          seedMealsForNewUser(u.id).catch(() => {})
         }
       })
       .catch(() => finish())   // network/auth error → still render the app
@@ -58,7 +49,6 @@ export function AuthProvider({ children }) {
         setUser(u)
         if (u) {
           fetchProfile(u.id).catch(() => {})
-          seedMealsForNewUser(u.id).catch(() => {})
         } else {
           setProfile(null)
         }

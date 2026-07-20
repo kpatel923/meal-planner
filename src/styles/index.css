@@ -166,6 +166,7 @@
     letter-spacing: -0.005em;
     transition: transform 0.14s cubic-bezier(0.34,1.56,0.64,1), background 0.15s ease, box-shadow 0.15s ease;
   }
+  .btn:active:not(:disabled) { transform: scale(0.97); }
   .btn-primary {
     @apply btn text-white;
     background: var(--brand);
@@ -449,6 +450,50 @@
 .day-content-in { animation: dayContentIn 0.28s cubic-bezier(0.22,1,0.36,1) both; }
 .meal-row-in    { animation: mealRowIn 0.34s cubic-bezier(0.22,1.2,0.36,1) both; }
 .check-pop      { animation: checkPop 0.34s cubic-bezier(0.22,1.4,0.36,1); }
+
+/* ── VISUAL REFRESH: cohesive micro-interactions ──────────────── */
+/* Universal press feedback: any element with .press dips slightly when tapped */
+.press { transition: transform 0.12s cubic-bezier(0.34,1.56,0.64,1); }
+.press:active { transform: scale(0.96); }
+.press-sm:active { transform: scale(0.98); }
+
+/* Lift on hover for interactive cards (desktop) */
+@media (hover: hover) {
+  .lift { transition: transform 0.22s cubic-bezier(0.22,1,0.36,1), box-shadow 0.22s ease; }
+  .lift:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(22,23,15,0.09); }
+}
+
+/* Gentle pulse to draw the eye to a new/updated element (one-shot) */
+@keyframes pulseOnce {
+  0% { box-shadow: 0 0 0 0 rgba(124,181,24,0.35); }
+  70% { box-shadow: 0 0 0 8px rgba(124,181,24,0); }
+  100% { box-shadow: 0 0 0 0 rgba(124,181,24,0); }
+}
+.pulse-once { animation: pulseOnce 0.9s ease-out 1; }
+
+/* Success celebration — a soft scale bounce for completion moments */
+@keyframes celebrate {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.06); }
+  55% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+.celebrate { animation: celebrate 0.5s cubic-bezier(0.34,1.56,0.64,1); }
+
+/* Shimmer-in for freshly loaded content */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in-up { animation: fadeInUp 0.4s cubic-bezier(0.22,1,0.36,1) both; }
+
+/* Soft icon wiggle for playful affordances (used sparingly) */
+@keyframes wiggle {
+  0%,100% { transform: rotate(0deg); }
+  25% { transform: rotate(-6deg); }
+  75% { transform: rotate(6deg); }
+}
+.group:hover .wiggle-on-hover { animation: wiggle 0.4s ease-in-out; }
 
 /* Day tab strip — horizontal scroll, snap, hidden scrollbar */
 .day-strip-scroll { scrollbar-width: none; -ms-overflow-style: none; scroll-snap-type: x proximity; }

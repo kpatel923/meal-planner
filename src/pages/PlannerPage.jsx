@@ -25,7 +25,7 @@ import {
   WeekOverview, PanelSection,
 } from '../components/planner/PlannerPanels'
 import {
-  Save, Loader2, Sparkles, X, ArrowLeftRight, ArrowRight, RotateCcw,
+  Save, Loader2, Sparkles, X, ArrowLeftRight, ArrowRight, RotateCcw, Edit2,
   Share2, Link as LinkIcon, Undo2, Wand2, Users,
   CalendarPlus, RefreshCw, BarChart3, Plus,
   Bookmark, SlidersHorizontal, Flame, Trash2, BookOpen, ChevronLeft, ChevronDown,
@@ -88,7 +88,7 @@ export default function PlannerPage() {
   const [mobileSheet,    setMobileSheet]    = useState(null) // 'overview' | 'grocery' | 'ai' | 'actions' | null
 
   // Single meals fetch — filter client-side instead of a second query.
-  const { meals: allMeals, loading: mealsLoading, toggleFavorite, bulkAddMeals, addMeal } = useMeals()
+  const { meals: allMeals, loading: mealsLoading, toggleFavorite, bulkAddMeals, addMeal, updateMeal } = useMeals()
   const filteredMeals = useMemo(
     () => allMeals.filter(m => dietTypes.includes(m.diet_type)),
     [allMeals, dietTypes],
@@ -110,6 +110,10 @@ export default function PlannerPage() {
 
   const [showGenMenu, setShowGenMenu] = useState(false)
   const [overviewOpen, setOverviewOpen] = useState(false)
+  const [quickCreate, setQuickCreate] = useState(null)   // { name, category, diet_type, dayIdx } | null
+  const [quickCreating, setQuickCreating] = useState(false)
+  const [editInline, setEditInline] = useState(null)     // { id, name, category, diet_type, ingredients } | null
+  const [savingInline, setSavingInline] = useState(false)
   function handleLoadPlan(plan) {
     storeLoadPlan(deserializePlanRow(plan))
     toast.success(`Loaded "${plan.name || 'saved plan'}"`)
@@ -261,33 +265,60 @@ export default function PlannerPage() {
   // straight into the slot, then open its editor on the Recipes page so the user
   // can fill in details. Lets you add meals fast while planning and flesh them
   // out later — the recipe carries a "needs details" flag until then.
-  async function handleCreateFromSearch() {
+  // "Create" from the swap search opens a lightweight quick-capture popup
+  // (name + category + diet) rather than the full editor — so there's no
+  // mandatory-field dead end. Details get filled in later.
+  function handleCreateFromSearch() {
     if (!swapTarget) return
     const name = swapSearch.trim()
     if (!name) return
+    setQuickCreate({ name, category: swapTarget.category, diet_type: 'veg', dayIdx: swapTarget.dayIdx })
+  }
+
+  async function confirmQuickCreate() {
+    if (!quickCreate || !quickCreate.name.trim()) return
+    setQuickCreating(true)
     const base = {
-      item_name: name,
-      category: swapTarget.category,
-      diet_type: 'veg',
+      item_name: quickCreate.name.trim(),
+      category: quickCreate.category,
+      diet_type: quickCreate.diet_type,
       ingredients: '',
       source: 'manual',
     }
-    // Try to flag it as a draft; if the needs_details column doesn't exist yet,
-    // fall back to creating it without the flag so the feature still works.
-    // Silent so addMeal's own toasts don't fire — we show our own below.
+    // Try to flag as draft; fall back if the needs_details column is absent.
     let { data, error } = await addMeal({ ...base, needs_details: true }, { silent: true })
     if (error) {
       const res = await addMeal(base, { silent: true })
       data = res.data; error = res.error
     }
+    setQuickCreating(false)
     if (error || !data) { toast.error('Could not create recipe'); return }
-    swapMeal(swapTarget.dayIdx, swapTarget.category, data)
+    // Drop it into the slot it was created for (use the meal's own category as
+    // the slot, so an override lands correctly).
+    swapMeal(quickCreate.dayIdx, quickCreate.category, data)
+    setQuickCreate(null)
     closeSwap()
-    toast.success(`Added "${name}" — add details when ready`, { icon: '📝' })
-    // Open the editor for this new recipe on the Recipes page, and tell it to
-    // return here (the planner) when the editor closes — since the user started
-    // this from the weekly plan, not the recipes page.
-    navigate('/recipes', { state: { editMealId: data.id, returnTo: '/planner' } })
+    toast.success(`Added "${data.item_name}" — add details when ready`, { icon: '📝' })
+  }
+
+  async function saveInlineEdit() {
+    if (!editInline || !editInline.name.trim()) return
+    setSavingInline(true)
+    const updates = {
+      item_name: editInline.name.trim(),
+      category: editInline.category,
+      diet_type: editInline.diet_type,
+      ingredients: editInline.ingredients.trim(),
+    }
+    if (updates.ingredients) {
+      const res = await updateMeal(editInline.id, { ...updates, needs_details: false })
+      if (res?.error) await updateMeal(editInline.id, updates)
+    } else {
+      await updateMeal(editInline.id, updates)
+    }
+    setSavingInline(false)
+    setEditInline(null)
+    toast.success('Recipe updated')
   }
 
   function handleSwapSelect(meal) {
@@ -942,6 +973,138 @@ export default function PlannerPage() {
         </div>
       )}
 
+      {/* ════════ Inline edit meal (from the plan modal) ════════ */}
+      {editInline && (
+        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center p-4 modal-safe"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+          onClick={e => e.target === e.currentTarget && !savingInline && setEditInline(null)}>
+          <div className="w-full max-w-sm card flex flex-col" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)', padding: 22, maxHeight: '86dvh', overflowY: 'auto' }}>
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent-light)' }}>
+                <Edit2 size={18} style={{ color: 'var(--accent-dark)' }} />
+              </div>
+              <h3 className="font-display font-bold" style={{ fontSize: 17, letterSpacing: '-0.02em', color: 'var(--text)' }}>Edit recipe</h3>
+            </div>
+
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6, display: 'block' }}>Name</label>
+            <input value={editInline.name}
+              onChange={e => setEditInline(p => ({ ...p, name: e.target.value }))}
+              className="input mb-4" style={{ width: '100%' }} />
+
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6, display: 'block' }}>Category</label>
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {[...CATEGORIES, 'Dessert'].map(cat => {
+                const active = editInline.category === cat
+                return (
+                  <button key={cat} onClick={() => setEditInline(p => ({ ...p, category: cat }))}
+                    className="px-3 py-1.5 rounded-full tap-target transition-all"
+                    style={{ fontSize: 12.5, fontWeight: 600, background: active ? 'var(--accent)' : 'var(--surface-2)', color: active ? '#1A1C16' : 'var(--text-2)', border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}` }}>
+                    {cat}
+                  </button>
+                )
+              })}
+            </div>
+
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6, display: 'block' }}>Diet</label>
+            <div className="flex gap-1.5 mb-4">
+              {[['veg','Veg'],['vegan','Vegan'],['nonveg','Non-veg']].map(([key, label]) => {
+                const active = editInline.diet_type === key
+                return (
+                  <button key={key} onClick={() => setEditInline(p => ({ ...p, diet_type: key }))}
+                    className="flex-1 px-3 py-1.5 rounded-full tap-target transition-all"
+                    style={{ fontSize: 12.5, fontWeight: 600, background: active ? 'var(--accent)' : 'var(--surface-2)', color: active ? '#1A1C16' : 'var(--text-2)', border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}` }}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6, display: 'block' }}>Ingredients</label>
+            <textarea value={editInline.ingredients}
+              onChange={e => setEditInline(p => ({ ...p, ingredients: e.target.value }))}
+              className="input mb-2" style={{ width: '100%', minHeight: 70, resize: 'vertical' }}
+              placeholder="comma, separated, ingredients" />
+            <button onClick={() => { const id = editInline.id; setEditInline(null); navigate('/recipes', { state: { editMealId: id, returnTo: '/planner' } }) }}
+              className="text-left mb-5" style={{ fontSize: 12, color: 'var(--accent-dark)', fontWeight: 600 }}>
+              Open full editor (photos, video, macros) →
+            </button>
+
+            <div className="flex gap-2.5">
+              <button onClick={() => setEditInline(null)} disabled={savingInline}
+                className="btn-secondary btn flex-1 tap-target">Cancel</button>
+              <button onClick={saveInlineEdit} disabled={savingInline || !editInline.name.trim()}
+                className="btn-primary btn flex-1 tap-target gap-2">
+                {savingInline ? <Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════════ Quick-create meal (name + category + diet) ════════ */}
+      {quickCreate && (
+        <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center p-4 modal-safe"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(12px)', animation: 'fadeIn 0.2s ease' }}
+          onClick={e => e.target === e.currentTarget && !quickCreating && setQuickCreate(null)}>
+          <div className="w-full max-w-sm card flex flex-col" style={{ animation: 'modalIn 0.3s cubic-bezier(0.16,1,0.3,1)', padding: 22 }}>
+            <div className="flex items-center gap-2.5 mb-4">
+              <div className="flex items-center justify-center shrink-0" style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--accent-light)' }}>
+                <Plus size={19} style={{ color: 'var(--accent-dark)' }} />
+              </div>
+              <div>
+                <h3 className="font-display font-bold" style={{ fontSize: 17, letterSpacing: '-0.02em', color: 'var(--text)' }}>Quick add</h3>
+                <p style={{ fontSize: 12, color: 'var(--text-3)' }}>Add now, fill in details later</p>
+              </div>
+            </div>
+
+            {/* Name */}
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6, display: 'block' }}>Name</label>
+            <input value={quickCreate.name} autoFocus
+              onChange={e => setQuickCreate(p => ({ ...p, name: e.target.value }))}
+              className="input mb-4" style={{ width: '100%' }} placeholder="e.g. Grandma's dal" />
+
+            {/* Category */}
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6, display: 'block' }}>Category</label>
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {[...CATEGORIES, 'Dessert'].map(cat => {
+                const active = quickCreate.category === cat
+                return (
+                  <button key={cat} onClick={() => setQuickCreate(p => ({ ...p, category: cat }))}
+                    className="px-3 py-1.5 rounded-full tap-target transition-all"
+                    style={{ fontSize: 12.5, fontWeight: 600, background: active ? 'var(--accent)' : 'var(--surface-2)', color: active ? '#1A1C16' : 'var(--text-2)', border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}` }}>
+                    {cat}
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Diet */}
+            <label style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-3)', marginBottom: 6, display: 'block' }}>Diet</label>
+            <div className="flex gap-1.5 mb-6">
+              {[['veg','Veg'],['vegan','Vegan'],['nonveg','Non-veg']].map(([key, label]) => {
+                const active = quickCreate.diet_type === key
+                return (
+                  <button key={key} onClick={() => setQuickCreate(p => ({ ...p, diet_type: key }))}
+                    className="flex-1 px-3 py-1.5 rounded-full tap-target transition-all"
+                    style={{ fontSize: 12.5, fontWeight: 600, background: active ? 'var(--accent)' : 'var(--surface-2)', color: active ? '#1A1C16' : 'var(--text-2)', border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}` }}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="flex gap-2.5">
+              <button onClick={() => setQuickCreate(null)} disabled={quickCreating}
+                className="btn-secondary btn flex-1 tap-target">Cancel</button>
+              <button onClick={confirmQuickCreate} disabled={quickCreating || !quickCreate.name.trim()}
+                className="btn-primary btn flex-1 tap-target gap-2">
+                {quickCreating ? <Loader2 size={15} className="animate-[spin_1s_linear_infinite]" /> : <><Plus size={15} /> Add</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ════════ Move meal modal ════════ */}
       {moveTarget && (
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-4 modal-safe"
@@ -1236,6 +1399,17 @@ export default function PlannerPage() {
           onToggleFavorite={(m) => m.id && toggleFavorite(m.id, m.is_favorite)}
           onSwap={() => { openSwap(viewMeal.dayIdx, viewMeal.category); setViewMeal(null) }}
           onMove={() => { openMove(viewMeal.dayIdx, viewMeal.category); setViewMeal(null) }}
+          onEdit={(m) => {
+            if (!m?.id) return   // can't edit eating-out/leftovers placeholders
+            setEditInline({
+              id: m.id,
+              name: m.item_name || '',
+              category: m.category || 'Dinner',
+              diet_type: m.diet_type || 'veg',
+              ingredients: m.ingredients || '',
+            })
+            setViewMeal(null)
+          }}
         />
       )}
     </div>

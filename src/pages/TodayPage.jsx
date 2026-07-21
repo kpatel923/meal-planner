@@ -1,10 +1,12 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { useMeals } from '../hooks/useMeals'
 import { useAuth } from '../hooks/useAuth'
 import { CATEGORIES } from '../lib/mealLogic'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
+import { estimateNutrition } from '../lib/nutrition'
+import { generateDailySummary } from '../lib/aiFeatures'
 import { getTodayIndex } from '../lib/weekDates'
 import { computeStreak, currentWeekDays, recordCookedToday } from '../lib/streak'
 import RecipeDetailModal from '../components/RecipeDetailModal'
@@ -12,10 +14,11 @@ import CookMode from '../components/CookMode'
 import MealRow from '../components/ui/MealRow'
 import SectionLabel from '../components/ui/SectionLabel'
 import ProgressRing from '../components/ui/ProgressRing'
+import MacrosWheel from '../components/ui/MacrosWheel'
 import { useCountUp } from '../hooks/useCountUp'
 import {
   Flame, Clock, Sparkles, CalendarDays,
-  Snowflake, Trophy, PartyPopper, Check, BookOpen, Plus,
+  Snowflake, Trophy, PartyPopper, Check, BookOpen, Plus, Loader2,
 } from 'lucide-react'
 
 function greeting() {
@@ -102,6 +105,44 @@ export default function TodayPage() {
     + (todayDessert ? (getMealFacts(todayDessert, servings).calories || 0) : 0)
   const animatedCals = useCountUp(caloriesSoFar)
 
+  // Full macro totals for the meals checked off today (for the macros wheel).
+  // Uses stored macro columns when present, else estimates from ingredients.
+  const macrosSoFar = useMemo(() => {
+    const totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
+    const add = (meal) => {
+      if (!meal) return
+      const facts = getMealFacts(meal, servings)
+      totals.calories += facts.calories || 0
+      let pro = meal.protein_g, carb = meal.carbs_g, fat = meal.fat_g
+      if (pro == null || carb == null || fat == null) {
+        const est = estimateNutrition(meal.ingredients, servings)
+        if (est) {
+          if (pro == null) pro = est.protein_g
+          if (carb == null) carb = est.carbs_g
+          if (fat == null) fat = est.fat_g
+        }
+      }
+      totals.protein_g += pro || 0
+      totals.carbs_g   += carb || 0
+      totals.fat_g     += fat || 0
+    }
+    planned.filter(m => isPrepDone(todayIdx, m.category)).forEach(m => add(m.meal))
+    if (todayDessert && isPrepDone(todayIdx, 'Dessert')) add(todayDessert)
+    return {
+      calories: Math.round(totals.calories),
+      protein_g: Math.round(totals.protein_g),
+      carbs_g: Math.round(totals.carbs_g),
+      fat_g: Math.round(totals.fat_g),
+    }
+  }, [planned, todayDessert, todayIdx, isPrepDone, servings])
+
+  const macroGoals = {
+    calories: profile?.daily_calories || 2000,
+    protein: profile?.daily_protein || 120,
+    carbs: profile?.daily_carbs || 250,
+    fat: profile?.daily_fat || 70,
+  }
+
   // Recompute streak whenever prep changes: if any meal is done today, today counts.
   useEffect(() => {
     const cookedToday = planned.some(m => isPrepDone(todayIdx, m.category))
@@ -114,6 +155,32 @@ export default function TodayPage() {
   const dateLabel = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })
 
   const [cookMeal, setCookMeal] = useState(null)
+
+  // AI daily summary — a warm recap + inspiring line at the bottom of Today.
+  const [daySummary, setDaySummary] = useState('')
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const summaryFetchedRef = useRef('')
+  useEffect(() => {
+    if (!planned.length) { setDaySummary(''); return }
+    // Re-fetch when the set of done meals changes (so the recap stays current),
+    // but not on every render — key on done-count + plan identity.
+    const mealNames = planned.map(m => m.meal?.item_name).filter(Boolean)
+    const key = `${todayIdx}|${doneCount}|${mealNames.join(',')}`
+    if (summaryFetchedRef.current === key) return
+    summaryFetchedRef.current = key
+    let cancelled = false
+    setSummaryLoading(true)
+    generateDailySummary({
+      meals: mealNames,
+      doneCount,
+      totalCount,
+      calories: caloriesSoFar,
+      calorieGoal: macroGoals.calories,
+    }).then(text => {
+      if (!cancelled && text) setDaySummary(text.trim())
+    }).catch(() => {}).finally(() => { if (!cancelled) setSummaryLoading(false) })
+    return () => { cancelled = true }
+  }, [planned, doneCount, totalCount, todayIdx]) // eslint-disable-line
   function handleStartCooking(meal) {
     setCookMeal(meal)
   }
@@ -193,6 +260,13 @@ export default function TodayPage() {
             </div>
           )}
 
+          {/* Macros wheel — fills as you check off meals */}
+          {totalCount > 0 && (
+            <div className="mb-4">
+              <MacrosWheel consumed={macrosSoFar} goals={macroGoals} />
+            </div>
+          )}
+
           {/* Progress card */}
           <div className="card mb-4 flex items-center gap-3" style={{ padding: '13px 15px' }}>
             <ProgressRing value={doneCount} max={totalCount || 1} size={48} stroke={5}
@@ -252,6 +326,25 @@ export default function TodayPage() {
                 <p className="font-display font-semibold" style={{ fontSize: 15, color: 'var(--text-2)' }}>Add a dessert</p>
               </div>
             </button>
+          )}
+
+          {/* AI daily summary — warm recap + a little inspiration */}
+          {(daySummary || summaryLoading) && (
+            <div className="card mt-5 mb-2 fade-in-up" style={{ padding: '16px 17px', background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', border: '1px solid var(--accent-light)' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="flex items-center justify-center shrink-0" style={{ width: 26, height: 26, borderRadius: 8, background: 'var(--accent)' }}>
+                  <Sparkles size={14} style={{ color: '#1A1C16' }} />
+                </div>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent-text)' }}>Your day</p>
+              </div>
+              {summaryLoading && !daySummary ? (
+                <div className="flex items-center gap-2" style={{ color: 'var(--text-3)', fontSize: 13.5 }}>
+                  <Loader2 size={14} className="animate-[spin_1s_linear_infinite]" /> Reflecting on your day…
+                </div>
+              ) : (
+                <p style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--text)' }}>{daySummary}</p>
+              )}
+            </div>
           )}
         </>
       )}

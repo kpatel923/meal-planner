@@ -50,7 +50,23 @@ Respond with ONLY the description, no preamble.`
   return callAI(prompt, 150)
 }
 
-// ── AI Meal Suggestions ────────────────────────────────────────────────
+// ── AI Daily Summary (Today page) ──────────────────────────────────────
+// Given today's meals and how many are done, returns a short warm recap plus
+// one inspiring line. Returns a plain string.
+export async function generateDailySummary({ meals, doneCount, totalCount, calories, calorieGoal }) {
+  const mealList = meals.length ? meals.join(', ') : 'no meals planned yet'
+  const progress = totalCount > 0 ? `${doneCount} of ${totalCount} meals cooked` : 'nothing planned'
+  const calLine = calories && calorieGoal ? ` About ${calories} of ${calorieGoal} calories so far.` : ''
+
+  const prompt = `You are a warm, encouraging meal companion. Write a short daily note (max 45 words, 2 sentences) for someone's meal day. First sentence: a friendly recap of their day's food and cooking progress. Second sentence: one genuinely uplifting, non-cheesy line to inspire them (about nourishment, self-care, or momentum — vary it).
+
+Today's meals: ${mealList}
+Progress: ${progress}.${calLine}
+
+Respond with ONLY the note, no preamble, no quotes.`
+
+  return callAI(prompt, 120)
+}
 // sourceMode: 'library' = only use existing meals | 'web' = suggest new ones | 'both' = mixed
 // dietPreferences: array like ['veg','vegan','nonveg'] from the user's profile
 export async function getMealSuggestions({

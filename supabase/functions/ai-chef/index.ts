@@ -11,8 +11,10 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 
 const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY")
-const TEXT_MODEL   = "llama-3.3-70b-versatile"
-const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+// Groq deprecated llama-3.3-70b-versatile and llama-4-scout (June 2026).
+// Migrated to current models: gpt-oss-120b for text, qwen3.6-27b for vision.
+const TEXT_MODEL   = "openai/gpt-oss-120b"
+const VISION_MODEL = "qwen/qwen3.6-27b"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

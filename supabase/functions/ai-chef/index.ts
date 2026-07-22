@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { prompt, maxTokens, imageBase64, fetchUrl } = await req.json()
+    const { prompt, maxTokens, imageBase64, fetchUrl, jsonMode } = await req.json()
 
     // ── URL metadata fetch path ──────────────────────────────────
     if (fetchUrl && typeof fetchUrl === "string") {
@@ -135,6 +135,9 @@ Deno.serve(async (req) => {
         messages,
         max_tokens: maxTokens || 400,
         temperature: hasImage ? 0.4 : 0.8, // lower temp for factual image reads
+        // JSON mode: qwen3.6-27b supports response_format, which forces valid
+        // JSON instead of prose/reasoning that we'd have to salvage by parsing.
+        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     })
 
@@ -153,17 +156,31 @@ Deno.serve(async (req) => {
     }
 
     const data = await groqRes.json()
-    const text = data.choices?.[0]?.message?.content || ""
+    const msg = data.choices?.[0]?.message
+    const finish = data.choices?.[0]?.finish_reason
+    // Reasoning models may leave `content` empty and put text in `reasoning`.
+    let text = msg?.content || ""
+    if (!text && typeof msg?.reasoning === "string") text = msg.reasoning
 
-    if (!text && data.choices?.[0]?.finish_reason) {
-      return json({ error: `Groq returned no content (reason: ${data.choices[0].finish_reason})` }, 502)
+    if (!text) {
+      const why = finish === "length"
+        ? "ran out of tokens (try a shorter prompt or higher max_tokens)"
+        : `reason: ${finish || "unknown"}`
+      return json({ error: `Groq returned no content (${why})` }, 502)
     }
 
     // _debug helps verify the image actually reached the function and which
     // model ran. Harmless to leave in; the client only reads `text`.
     return json({
       text,
-      _debug: { receivedImage: hasImage, model, imageChars: hasImage ? imageBase64.length : 0 },
+      _debug: {
+        receivedImage: hasImage,
+        model,
+        imageChars: hasImage ? imageBase64.length : 0,
+        finish,
+        jsonMode: !!jsonMode,
+        usedReasoningField: !msg?.content && !!msg?.reasoning,
+      },
     })
   } catch (err) {
     return json({ error: `Edge function error: ${err.message}` }, 500)

@@ -49,9 +49,11 @@ export function extractJSON(raw) {
   throw new Error('Incomplete JSON in AI response')
 }
 
-async function callAI(prompt, maxTokens = 400, imageBase64 = null, _attempt = 0) {
+async function callAI(prompt, maxTokens = 400, imageBase64 = null, opts = {}) {
+  const { jsonMode = false, _attempt = 0 } = opts
   const body = { prompt, maxTokens }
   if (imageBase64) body.imageBase64 = imageBase64
+  if (jsonMode) body.jsonMode = true
 
   const { data, error } = await supabase.functions.invoke('ai-chef', { body })
 
@@ -74,7 +76,7 @@ async function callAI(prompt, maxTokens = 400, imageBase64 = null, _attempt = 0)
     if (isRateLimit(detail) && _attempt < 2) {
       const wait = parseRetrySeconds(detail) ?? 6
       await new Promise(r => setTimeout(r, (wait + 0.5) * 1000))
-      return callAI(prompt, maxTokens, imageBase64, _attempt + 1)
+      return callAI(prompt, maxTokens, imageBase64, { ...opts, _attempt: _attempt + 1 })
     }
     console.error('AI Chef error:', detail)
     if (isRateLimit(detail)) {
@@ -387,7 +389,7 @@ Provide:
 Respond with JSON ONLY, no markdown backticks, no preamble:
 {"isFood":true,"name":"Dish Name","ingredients":"ing1, ing2, ing3","diet_type":"veg","category":"Lunch","description":"A short honest description.","searchQuery":"dish name recipe","prepTime":25,"caloriesPerServing":480,"confidence":"medium"}`
 
-  const raw = await callAI(prompt, 600, imageBase64)
+  const raw = await callAI(prompt, 600, imageBase64, { jsonMode: true })
   try {
     const parsed = extractJSON(raw)
     if (parsed.isFood === false || (!parsed.name && !parsed.ingredients)) {
@@ -406,8 +408,15 @@ Respond with JSON ONLY, no markdown backticks, no preamble:
     }
   } catch (e) {
     if (e.message?.includes("doesn't look like")) throw e
-    console.error('Failed to parse meal photo analysis:', raw)
-    throw new Error('Could not read that photo — try a clearer shot of the dish')
+    console.error('Failed to parse meal photo analysis. Raw model output:', raw)
+    // Surface a snippet of what actually came back — "try a clearer photo" is
+    // misleading when the real problem is the model replying with prose.
+    const snippet = (raw || '').trim().slice(0, 120).replace(/\s+/g, ' ')
+    throw new Error(
+      snippet
+        ? `AI didn't return recipe data. It said: "${snippet}…"`
+        : 'AI returned an empty response — try again in a moment'
+    )
   }
 }
 
@@ -433,7 +442,7 @@ Respond with JSON ONLY, no markdown, no preamble:
 If the photo contains no identifiable food, respond:
 {"isFood":false,"ingredients":[]}`
 
-  const raw = await callAI(prompt, 500, imageBase64)
+  const raw = await callAI(prompt, 500, imageBase64, { jsonMode: true })
   try {
     const parsed = extractJSON(raw)
     if (parsed.isFood === false || !Array.isArray(parsed.ingredients) || parsed.ingredients.length === 0) {

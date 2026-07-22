@@ -124,22 +124,40 @@ Deno.serve(async (req) => {
         }]
       : [{ role: "user", content: prompt }]
 
-    const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: maxTokens || 400,
-        temperature: hasImage ? 0.4 : 0.8, // lower temp for factual image reads
-        // JSON mode: qwen3.6-27b supports response_format, which forces valid
-        // JSON instead of prose/reasoning that we'd have to salvage by parsing.
-        ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
-      }),
+    // Build the request once so we can retry it with tweaks if needed.
+    const buildBody = (useJsonMode: boolean) => JSON.stringify({
+      model,
+      messages,
+      max_tokens: maxTokens || 400,
+      temperature: hasImage ? 0.4 : 0.8, // lower temp for factual image reads
+      ...(useJsonMode ? { response_format: { type: "json_object" } } : {}),
+      ...(hasImage
+        ? { reasoning_effort: "none", ...(useJsonMode ? { reasoning_format: "hidden" } : {}) }
+        : {}),
     })
+
+    const postToGroq = (useJsonMode: boolean) =>
+      fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
+        },
+        body: buildBody(useJsonMode),
+      })
+
+    let groqRes = await postToGroq(!!jsonMode)
+
+    // If strict JSON mode fails validation, fall back to a normal completion —
+    // the client can still salvage JSON from the text. Better degraded than dead.
+    let usedJsonFallback = false
+    if (!groqRes.ok && jsonMode && groqRes.status === 400) {
+      const peek = await groqRes.clone().text()
+      if (/validate JSON|json_validate|failed_generation/i.test(peek)) {
+        usedJsonFallback = true
+        groqRes = await postToGroq(false)
+      }
+    }
 
     if (!groqRes.ok) {
       const errText = await groqRes.text()
@@ -179,6 +197,7 @@ Deno.serve(async (req) => {
         imageChars: hasImage ? imageBase64.length : 0,
         finish,
         jsonMode: !!jsonMode,
+        usedJsonFallback,
         usedReasoningField: !msg?.content && !!msg?.reasoning,
       },
     })

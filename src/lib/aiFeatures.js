@@ -4,27 +4,85 @@ import { supabase } from './supabase'
 // The Groq API key lives server-side only (set as a Supabase secret).
 // This file never touches the key directly. Provider-agnostic by design.
 
-async function callAI(prompt, maxTokens = 400, imageBase64 = null) {
+// Pull a suggested wait (seconds) out of Groq's rate-limit message, if present.
+function parseRetrySeconds(msg) {
+  const m = /try again in ([\d.]+)\s*s/i.exec(msg || '')
+  const secs = m ? parseFloat(m[1]) : NaN
+  return Number.isFinite(secs) ? Math.min(secs, 30) : null
+}
+
+function isRateLimit(msg) {
+  return /429|rate limit/i.test(msg || '')
+}
+
+// Robustly pull a JSON object out of a model response. Reasoning models (and
+// chatty ones) often wrap the answer in <think> blocks, markdown fences, or a
+// sentence of preamble — a bare JSON.parse would fail on all of those. This
+// strips the noise and extracts the first balanced {...} block.
+export function extractJSON(raw) {
+  if (!raw || typeof raw !== 'string') throw new Error('Empty AI response')
+  let s = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')   // reasoning blocks
+    .replace(/<\/?think>/gi, '')                 // stray/unclosed tags
+    .replace(/```json|```/g, '')                 // markdown fences
+    .trim()
+
+  // Fast path: already valid JSON.
+  try { return JSON.parse(s) } catch { /* keep going */ }
+
+  // Otherwise find the first balanced object, ignoring braces inside strings.
+  const start = s.indexOf('{')
+  if (start === -1) throw new Error('No JSON object in AI response')
+  let depth = 0, inStr = false, esc = false
+  for (let i = start; i < s.length; i++) {
+    const c = s[i]
+    if (esc) { esc = false; continue }
+    if (c === '\\') { esc = true; continue }
+    if (c === '"') { inStr = !inStr; continue }
+    if (inStr) continue
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return JSON.parse(s.slice(start, i + 1))
+    }
+  }
+  throw new Error('Incomplete JSON in AI response')
+}
+
+async function callAI(prompt, maxTokens = 400, imageBase64 = null, _attempt = 0) {
   const body = { prompt, maxTokens }
   if (imageBase64) body.imageBase64 = imageBase64
 
   const { data, error } = await supabase.functions.invoke('ai-chef', { body })
 
+  let detail = null
   if (error) {
-    let detail = error.message
+    detail = error.message
     try {
       if (error.context && typeof error.context.json === 'function') {
         const body = await error.context.json()
         if (body?.error) detail = body.error
       }
     } catch { /* fall back to generic message */ }
+  } else if (data?.error) {
+    detail = data.error
+  }
+
+  if (detail) {
+    // Rate limited: wait the suggested time and retry once or twice. Groq's
+    // free tier is 8k tokens/minute, which a vision call can bump into.
+    if (isRateLimit(detail) && _attempt < 2) {
+      const wait = parseRetrySeconds(detail) ?? 6
+      await new Promise(r => setTimeout(r, (wait + 0.5) * 1000))
+      return callAI(prompt, maxTokens, imageBase64, _attempt + 1)
+    }
     console.error('AI Chef error:', detail)
+    if (isRateLimit(detail)) {
+      throw new Error('AI is busy right now (rate limit) — wait a few seconds and try again.')
+    }
     throw new Error(detail || 'AI request failed')
   }
-  if (data?.error) {
-    console.error('AI Chef server error:', data.error)
-    throw new Error(data.error)
-  }
+
   if (data?._debug) {
     console.log('[ai-chef debug]', data._debug)
   }
@@ -118,8 +176,7 @@ Respond with a JSON array ONLY, no markdown backticks, no preamble:
 
   const raw = await callAI(prompt, 800)
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     return Array.isArray(parsed) ? parsed : []
   } catch (e) {
     console.error('Failed to parse AI suggestions:', raw)
@@ -167,7 +224,7 @@ Rules:
   const raw = await callAI(prompt, 700)
   let parsed
   try {
-    parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    parsed = extractJSON(raw)
   } catch {
     // Fallback: split detail_notes into sentence steps if AI parse fails.
     const sentences = (notes || `Prepare ${name} using: ${ingredients}`)
@@ -216,7 +273,7 @@ Rules:
   const raw = await callAI(prompt, 400)
   let parsed
   try {
-    parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    parsed = extractJSON(raw)
   } catch {
     throw new Error('Could not generate that recipe — try a different name or enter it manually')
   }
@@ -279,8 +336,7 @@ If you genuinely cannot infer a dish, respond with:
 
   const raw = await callAI(prompt, 350)
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     return {
       name:        parsed.name || meta.title || '',
       category:    parsed.category || 'Dinner',
@@ -331,10 +387,9 @@ Provide:
 Respond with JSON ONLY, no markdown backticks, no preamble:
 {"isFood":true,"name":"Dish Name","ingredients":"ing1, ing2, ing3","diet_type":"veg","category":"Lunch","description":"A short honest description.","searchQuery":"dish name recipe","prepTime":25,"caloriesPerServing":480,"confidence":"medium"}`
 
-  const raw = await callAI(prompt, 500, imageBase64)
+  const raw = await callAI(prompt, 600, imageBase64)
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     if (parsed.isFood === false || (!parsed.name && !parsed.ingredients)) {
       throw new Error("That doesn't look like a meal — try another photo")
     }
@@ -378,10 +433,9 @@ Respond with JSON ONLY, no markdown, no preamble:
 If the photo contains no identifiable food, respond:
 {"isFood":false,"ingredients":[]}`
 
-  const raw = await callAI(prompt, 400, imageBase64)
+  const raw = await callAI(prompt, 500, imageBase64)
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     if (parsed.isFood === false || !Array.isArray(parsed.ingredients) || parsed.ingredients.length === 0) {
       throw new Error("Couldn't spot any ingredients — try a clearer, well-lit photo")
     }

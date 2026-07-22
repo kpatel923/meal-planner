@@ -1,10 +1,14 @@
 // ── Image helpers for the photo-to-recipe feature ───────────────────
 // Phone photos are often 3–10 MB. We downscale to a sane max dimension and
-// re-encode as JPEG to keep the upload small and the vision call fast, while
-// staying well within Groq's image size limits.
+// re-encode as JPEG to keep the upload small and the vision call fast.
+//
+// Size matters a LOT here: vision models bill tokens by image resolution, and
+// Groq's free tier allows only 8,000 tokens/minute. A 1024px photo can cost
+// ~3,000+ tokens on its own, which blows the budget in a single request. 768px
+// is still plenty of detail to identify a dish and roughly halves the cost.
 
-const MAX_DIMENSION = 1024   // px, longest edge
-const JPEG_QUALITY  = 0.82
+const MAX_DIMENSION = 768    // px, longest edge
+const JPEG_QUALITY  = 0.72
 
 /**
  * Takes a File (from <input type="file"> or camera) and returns a compressed

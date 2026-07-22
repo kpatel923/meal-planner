@@ -270,7 +270,20 @@ export default function RecipesPage() {
       needs_details: false,   // saving with details clears the draft flag
     }
     if (!editMeal) payload.source = 'manual'
-    editMeal ? await updateMeal(editMeal.id, payload) : await addMeal(payload)
+    if (editMeal) {
+      // Clear the draft flag on save; if the column doesn't exist, retry without it.
+      const res = await updateMeal(editMeal.id, payload)
+      if (res?.error) {
+        const { needs_details, ...rest } = payload
+        await updateMeal(editMeal.id, rest)
+      }
+    } else {
+      const res = await addMeal(payload)
+      if (res?.error) {
+        const { needs_details, ...rest } = payload
+        await addMeal(rest)
+      }
+    }
     setSubmitting(false); closeForm()
   }
 

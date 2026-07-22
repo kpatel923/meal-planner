@@ -445,6 +445,9 @@ export default function PlannerPage() {
           carbs_g:          meal.carbs_g          ?? live.carbs_g,
           fat_g:            meal.fat_g            ?? live.fat_g,
           fiber_g:          meal.fiber_g          ?? live.fiber_g,
+          // Recipe-truth field: always reflect the live recipe so the Draft
+          // badge clears once details are added on the Recipes page.
+          needs_details:    live.needs_details,
         } : meal
       }
     }

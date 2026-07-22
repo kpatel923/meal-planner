@@ -48,7 +48,10 @@ export default function TodayPage() {
       const meal = day[cat]
       if (!meal) return { category: cat, meal: null }
       const live = byId.get(meal.id)
-      return { category: cat, meal: live ? { ...live, ...meal } : meal }
+      // Merge plan snapshot with the live recipe. Plan-specific fields win,
+      // but recipe-truth fields (like needs_details) come from the live copy
+      // so edits on the Recipes page reflect here (e.g. the Draft badge clears).
+      return { category: cat, meal: live ? { ...live, ...meal, needs_details: live.needs_details } : meal }
     })
   }, [weeklyPlan, todayIdx, allMeals])
 
@@ -61,7 +64,7 @@ export default function TodayPage() {
     const d = weeklyPlan?.[todayIdx]?.Dessert
     if (!d) return null
     const live = (allMeals || []).find(m => m.id === d.id)
-    return live ? { ...live, ...d } : d
+    return live ? { ...live, ...d, needs_details: live.needs_details } : d
   }, [weeklyPlan, todayIdx, allMeals])
 
   // Pick the meal to feature based on time of day, falling back sensibly.

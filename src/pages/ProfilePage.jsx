@@ -45,6 +45,8 @@ export default function ProfilePage() {
   const [savingPantry, setSavingPantry] = useState(false)
   const [dailyCalories, setDailyCalories] = useState(profile?.daily_calories != null ? String(profile.daily_calories) : '')
   const [dailyProtein, setDailyProtein] = useState(profile?.daily_protein != null ? String(profile.daily_protein) : '')
+  const [dailyCarbs, setDailyCarbs] = useState(profile?.daily_carbs != null ? String(profile.daily_carbs) : '')
+  const [dailyFat, setDailyFat] = useState(profile?.daily_fat != null ? String(profile.daily_fat) : '')
   const [savingGoals, setSavingGoals] = useState(false)
   const [notifOn, setNotifOn] = useState(false)
   const [notifBusy, setNotifBusy] = useState(false)
@@ -174,7 +176,13 @@ export default function ProfilePage() {
   async function handleSaveGoals() {
     setSavingGoals(true)
     const toInt = v => { const n = parseInt(v, 10); return Number.isFinite(n) && n >= 0 ? n : null }
-    const { error } = await updateProfile({ daily_calories: toInt(dailyCalories), daily_protein: toInt(dailyProtein) })
+    const full = { daily_calories: toInt(dailyCalories), daily_protein: toInt(dailyProtein), daily_carbs: toInt(dailyCarbs), daily_fat: toInt(dailyFat) }
+    let { error } = await updateProfile(full)
+    // If the carbs/fat columns don't exist yet, save calories+protein anyway.
+    if (error) {
+      const res = await updateProfile({ daily_calories: full.daily_calories, daily_protein: full.daily_protein })
+      error = res.error
+    }
     setSavingGoals(false)
     if (error) toast.error('Could not save goals'); else toast.success('Goals saved')
   }
@@ -470,6 +478,16 @@ export default function ProfilePage() {
             <label className="input-label">Protein / day (g)</label>
             <input className="input" type="number" min="0" inputMode="numeric"
               value={dailyProtein} onChange={e => setDailyProtein(e.target.value)} placeholder="e.g. 120" />
+          </div>
+          <div>
+            <label className="input-label">Carbs / day (g)</label>
+            <input className="input" type="number" min="0" inputMode="numeric"
+              value={dailyCarbs} onChange={e => setDailyCarbs(e.target.value)} placeholder="e.g. 250" />
+          </div>
+          <div>
+            <label className="input-label">Fat / day (g)</label>
+            <input className="input" type="number" min="0" inputMode="numeric"
+              value={dailyFat} onChange={e => setDailyFat(e.target.value)} placeholder="e.g. 70" />
           </div>
         </div>
         <button onClick={handleSaveGoals} disabled={savingGoals} className="btn-primary btn tap-target mt-4">

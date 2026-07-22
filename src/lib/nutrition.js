@@ -147,6 +147,31 @@ export function nutritionColor(calories) {
 }
 
 // Weekly totals from a plan
+// ── Canonical per-meal macros (PER PERSON, one serving) ────────────────
+// Single source of truth so every screen reports the same numbers. Uses the
+// recipe's stored value for each macro when present, and falls back to an
+// estimate PER MACRO (a recipe can have calories but no protein).
+export function mealMacros(meal, servings = 1) {
+  const out = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 }
+  if (!meal) return out
+  let { calories, protein_g, carbs_g, fat_g, fiber_g } = meal
+  const needsEst = [calories, protein_g, carbs_g, fat_g, fiber_g].some(v => v == null)
+  const est = needsEst ? estimateNutrition(meal.ingredients, servings) : null
+  if (est) {
+    if (calories  == null) calories  = est.calories
+    if (protein_g == null) protein_g = est.protein_g
+    if (carbs_g   == null) carbs_g   = est.carbs_g
+    if (fat_g     == null) fat_g     = est.fat_g
+    if (fiber_g   == null) fiber_g   = est.fiber_g
+  }
+  out.calories  = calories  || 0
+  out.protein_g = protein_g || 0
+  out.carbs_g   = carbs_g   || 0
+  out.fat_g     = fat_g     || 0
+  out.fiber_g   = fiber_g   || 0
+  return out
+}
+
 export function weeklyNutritionTotals(weeklyPlan, servings = 1) {
   let totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0, fiber_g: 0 }
   let mealCount = 0
@@ -157,16 +182,13 @@ export function weeklyNutritionTotals(weeklyPlan, servings = 1) {
     Object.values(day).forEach(meal => {
       if (!meal) return
       mealCount++
-      // Prefer user-entered values, fall back to estimate
-      const nut = (meal.calories != null)
-        ? meal
-        : estimateNutrition(meal.ingredients, servings)
-      if (!nut) return
-      totals.calories  += (nut.calories  || 0) * servings
-      totals.protein_g += (nut.protein_g || 0) * servings
-      totals.carbs_g   += (nut.carbs_g   || 0) * servings
-      totals.fat_g     += (nut.fat_g     || 0) * servings
-      totals.fiber_g   += (nut.fiber_g   || 0) * servings
+      // PER-PERSON values — nutrition goals are personal, not household totals.
+      const nut = mealMacros(meal, servings)
+      totals.calories  += nut.calories
+      totals.protein_g += nut.protein_g
+      totals.carbs_g   += nut.carbs_g
+      totals.fat_g     += nut.fat_g
+      totals.fiber_g   += nut.fiber_g
     })
   })
 

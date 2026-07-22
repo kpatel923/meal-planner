@@ -5,7 +5,7 @@ import { useMeals } from '../hooks/useMeals'
 import { useAuth } from '../hooks/useAuth'
 import { CATEGORIES } from '../lib/mealLogic'
 import { getMealFacts, formatPrepTime } from '../lib/mealFacts'
-import { estimateNutrition } from '../lib/nutrition'
+import { mealMacros } from '../lib/nutrition'
 import { generateDailySummary } from '../lib/aiFeatures'
 import { getTodayIndex } from '../lib/weekDates'
 import { computeStreak, currentWeekDays, recordCookedToday } from '../lib/streak'
@@ -114,20 +114,12 @@ export default function TodayPage() {
     const totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 }
     const add = (meal) => {
       if (!meal) return
-      const facts = getMealFacts(meal, servings)
-      totals.calories += facts.calories || 0
-      let pro = meal.protein_g, carb = meal.carbs_g, fat = meal.fat_g
-      if (pro == null || carb == null || fat == null) {
-        const est = estimateNutrition(meal.ingredients, servings)
-        if (est) {
-          if (pro == null) pro = est.protein_g
-          if (carb == null) carb = est.carbs_g
-          if (fat == null) fat = est.fat_g
-        }
-      }
-      totals.protein_g += pro || 0
-      totals.carbs_g   += carb || 0
-      totals.fat_g     += fat || 0
+      // Same canonical helper the planner uses — keeps both screens in sync.
+      const n = mealMacros(meal, servings)
+      totals.calories  += n.calories
+      totals.protein_g += n.protein_g
+      totals.carbs_g   += n.carbs_g
+      totals.fat_g     += n.fat_g
     }
     planned.filter(m => isPrepDone(todayIdx, m.category)).forEach(m => add(m.meal))
     if (todayDessert && isPrepDone(todayIdx, 'Dessert')) add(todayDessert)

@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMeals } from '../hooks/useMeals'
 import { usePlanStore } from '../hooks/usePlanStore'
 import { useAuth } from '../hooks/useAuth'
-import { getMealSuggestions, analyzeMealPhoto, detectFridgeIngredients } from '../lib/aiFeatures'
+import { getMealSuggestions, analyzeMealPhoto, detectFridgeIngredients, recommendNewRecipe } from '../lib/aiFeatures'
 import { matchMealsToIngredients } from '../lib/fridgeMatch'
 import { fileToCompressedDataURL } from '../lib/imageUtils'
 import {
   Sparkles, Loader2, Plus, RefreshCw,
   X, Edit2, Check, BookOpen, Globe, Layers,
-  Play, FileText, Users, Mic, Camera, Search, Clock, Flame, Image as ImageIcon, Refrigerator,
+  Play, FileText, Users, Mic, Camera, Search, Clock, Flame, Image as ImageIcon, Refrigerator, Dices, ArrowRight,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -175,6 +176,22 @@ export default function AISuggestionsPage() {
   const { profile } = useAuth()
   const { servings } = usePlanStore()
   const { meals, addMeal } = useMeals()
+  const navigate = useNavigate()
+
+  const [recommendLoading, setRecommendLoading] = useState(false)
+  async function handleRecommendSomething() {
+    setRecommendLoading(true)
+    try {
+      const suggestion = await recommendNewRecipe(meals, profile?.diet_prefs || [])
+      // Open the Recipes page with the ADD form pre-filled — user reviews,
+      // tweaks if needed, then Save or Cancel. Nothing is saved yet.
+      navigate('/recipes', { state: { prefillMeal: suggestion, returnTo: '/ai' } })
+    } catch (e) {
+      toast.error(e.message || 'Could not get a suggestion right now')
+    } finally {
+      setRecommendLoading(false)
+    }
+  }
 
   const [ingredients,  setIngredients]  = useState('')
   const [category,     setCategory]     = useState('any')
@@ -364,6 +381,24 @@ export default function AISuggestionsPage() {
           Tell me what's in your fridge — I'll suggest meals you can make right now.
         </p>
       </div>
+
+      {/* Recommend me something — one AI-suggested recipe, ready to save */}
+      <button onClick={handleRecommendSomething} disabled={recommendLoading}
+        className="w-full flex items-center gap-3.5 mb-5 tap-target press"
+        style={{ padding: '15px 17px', borderRadius: 18, border: '1.5px solid var(--accent)', background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', animation: 'slideUp 0.4s ease 0.05s both' }}>
+        <div className="flex items-center justify-center shrink-0" style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--accent)' }}>
+          {recommendLoading
+            ? <Loader2 size={19} className="animate-[spin_1s_linear_infinite]" style={{ color: '#1A1C16' }} />
+            : <Dices size={19} style={{ color: '#1A1C16' }} />}
+        </div>
+        <div className="flex-1 text-left">
+          <p className="font-display font-bold" style={{ fontSize: 15.5, color: 'var(--text)' }}>
+            {recommendLoading ? 'Thinking of something…' : 'Recommend me something'}
+          </p>
+          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>A new recipe idea based on your library</p>
+        </div>
+        {!recommendLoading && <ArrowRight size={17} style={{ color: 'var(--accent-dark)' }} />}
+      </button>
 
       {/* Context chips */}
       <div className="flex flex-wrap gap-2 mb-5 mt-3" style={{ animation:'slideUp 0.4s ease 0.03s both' }}>

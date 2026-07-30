@@ -111,16 +111,24 @@ export default function RecipesPage() {
 
   // If we arrived here from "Create recipe" in the planner swap, open the editor
   // for that freshly-created recipe so the user can fill in details right away.
+  // Or, if arriving with a prefillMeal (an AI-suggested recipe not yet saved),
+  // open the ADD form pre-populated so the user can review, tweak, and save it.
   useEffect(() => {
     const editId = location.state?.editMealId
+    const prefill = location.state?.prefillMeal
     if (editId && meals.length) {
       const target = meals.find(m => m.id === editId)
       if (target) {
         returnToRef.current = location.state?.returnTo || null
         openEdit(target)
-        // Clear the navigation state so it doesn't re-open on back/refresh.
         window.history.replaceState({}, '')
       }
+    } else if (prefill) {
+      returnToRef.current = location.state?.returnTo || null
+      setForm({ ...EMPTY, ...prefill })
+      setEditMeal(null)
+      setShowForm(true)
+      window.history.replaceState({}, '')
     }
   }, [location.state, meals])
 

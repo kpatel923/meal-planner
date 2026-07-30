@@ -462,3 +462,39 @@ If the photo contains no identifiable food, respond:
     throw new Error('Could not read that photo — try a clearer, well-lit shot')
   }
 }
+
+// ── AI Recipe Recommendation ────────────────────────────────────────────
+// Suggests ONE new recipe the user doesn't already have, based on their
+// existing library (so it complements their taste but isn't a duplicate) and
+// diet preferences. Returns a form-ready object: item_name, category,
+// diet_type, ingredients, prep_time, calories.
+export async function recommendNewRecipe(existingMeals = [], dietPrefs = []) {
+  const names = existingMeals.map(m => m.item_name).filter(Boolean)
+  const sample = names.slice(0, 60).join(', ') || 'no recipes yet'
+  const diets = dietPrefs.length ? dietPrefs.join('/') : 'any'
+
+  const prompt = `You are a meal-planning assistant. Suggest ONE new recipe this
+person doesn't already have, based on the style of their existing recipes below.
+It should feel like a natural fit for their taste, but be genuinely NEW — not a
+near-duplicate of anything already in the list.
+
+Their existing recipes: ${sample}
+Diet preference: ${diets}
+
+Respond with JSON ONLY, no markdown, no preamble:
+{"item_name":"Recipe Name","category":"Breakfast|Lunch|Dinner|Snack","diet_type":"veg|vegan|nonveg","ingredients":"comma, separated, ingredients","prep_time":25,"calories":350}`
+
+  const raw = await callAI(prompt, 400, null, { jsonMode: true })
+  const parsed = extractJSON(raw)
+  if (!parsed.item_name || !parsed.category) {
+    throw new Error('AI could not come up with a suggestion — try again')
+  }
+  return {
+    item_name: String(parsed.item_name).trim(),
+    category: ['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(parsed.category) ? parsed.category : 'Dinner',
+    diet_type: ['veg', 'vegan', 'nonveg'].includes(parsed.diet_type) ? parsed.diet_type : 'veg',
+    ingredients: String(parsed.ingredients || '').trim(),
+    prep_time: Number.isFinite(parsed.prep_time) ? parsed.prep_time : '',
+    calories: Number.isFinite(parsed.calories) ? parsed.calories : '',
+  }
+}

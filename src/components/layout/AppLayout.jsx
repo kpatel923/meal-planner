@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
 import { useTheme } from '../../hooks/useTheme'
 import Onboarding from '../Onboarding'
+import PendingSuggestion from '../PendingSuggestion'
 import {
   ShoppingCart, Bookmark,
   BookOpen, User, LogOut, ChefHat,
@@ -150,6 +151,9 @@ export default function AppLayout() {
           <Outlet />
         </div>
       </main>
+
+      {/* AI recipe suggestion, if one's pending — checked once per session */}
+      <PendingSuggestion />
 
       {/* ── Mobile bottom nav — floating pill bar ────────────── */}
       {/* Fade scrim: content dissolves into the background as it nears the bar */}

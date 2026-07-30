@@ -131,9 +131,14 @@ Deno.serve(async (req) => {
       max_tokens: maxTokens || 400,
       temperature: hasImage ? 0.4 : 0.8, // lower temp for factual image reads
       ...(useJsonMode ? { response_format: { type: "json_object" } } : {}),
-      ...(hasImage
-        ? { reasoning_effort: "none", ...(useJsonMode ? { reasoning_format: "hidden" } : {}) }
-        : {}),
+      // Both our models (gpt-oss-120b and qwen3.6-27b) are reasoning models.
+      // JSON mode requires reasoning_format "hidden" on Groq's reasoning
+      // models, or raw <think> output leaks in and breaks JSON validation —
+      // regardless of which model is in play.
+      ...(useJsonMode ? { reasoning_format: "hidden" } : {}),
+      // Non-thinking mode is qwen-specific ("none" isn't valid on gpt-oss,
+      // which reasons via effort tiers instead) — only send it for vision.
+      ...(hasImage ? { reasoning_effort: "none" } : {}),
     })
 
     const postToGroq = (useJsonMode: boolean) =>

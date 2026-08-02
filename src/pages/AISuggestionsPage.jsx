@@ -9,7 +9,7 @@ import { fileToCompressedDataURL } from '../lib/imageUtils'
 import {
   Sparkles, Loader2, Plus, RefreshCw,
   X, Edit2, Check, BookOpen, Globe, Layers,
-  Play, FileText, Users, Mic, Camera, Search, Clock, Flame, Image as ImageIcon, Refrigerator, Dices, ArrowRight,
+  Play, FileText, Users, Mic, Camera, Search, Clock, Flame, Image as ImageIcon, Refrigerator, Dices, ListChecks,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
@@ -19,7 +19,7 @@ const DIET_COLORS = {
   vegan:  { bg:'var(--success-light)', text:'var(--success)',    border:'var(--success)' },
   nonveg: { bg:'rgba(212,61,43,0.1)',  text:'var(--danger)',     border:'rgba(212,61,43,0.25)' },
 }
-const CAT_ICONS = { Breakfast:'🍳', Lunch:'🥗', Dinner:'🍝', Snack:'🍎' }
+const CAT_ICONS = { Breakfast:'🍳', Lunch:'🥗', Dinner:'🍝', Snack:'🍎', Dessert:'🍰' }
 
 const SOURCE_OPTIONS = [
   { key:'library', label:'My Recipes', icon:<BookOpen size={14} />, desc:'Find meals I can already make' },
@@ -53,7 +53,7 @@ function ReviewModal({ suggestion, onClose, onConfirm }) {
     onClose()
   }
 
-  const CATEGORIES = ['Breakfast','Lunch','Dinner','Snack']
+  const CATEGORIES = ['Breakfast','Lunch','Dinner','Snack','Dessert']
   const DIET_OPTIONS = ['veg','vegan','nonveg']
 
   return (
@@ -178,11 +178,14 @@ export default function AISuggestionsPage() {
   const { meals, addMeal } = useMeals()
   const navigate = useNavigate()
 
+  const [activeMode, setActiveMode] = useState('surprise')   // 'surprise' | 'ingredients' | 'photo'
+  const [recommendCategory, setRecommendCategory] = useState('any')
+
   const [recommendLoading, setRecommendLoading] = useState(false)
   async function handleRecommendSomething() {
     setRecommendLoading(true)
     try {
-      const suggestion = await recommendNewRecipe(meals, profile?.diet_prefs || [])
+      const suggestion = await recommendNewRecipe(meals, profile?.diet_prefs || [], recommendCategory)
       // Open the Recipes page with the ADD form pre-filled — user reviews,
       // tweaks if needed, then Save or Cancel. Nothing is saved yet.
       navigate('/recipes', { state: { prefillMeal: suggestion, returnTo: '/ai' } })
@@ -366,6 +369,14 @@ export default function AISuggestionsPage() {
     'salmon, lemon, asparagus, olive oil',
   ]
 
+  const MODES = [
+    { key: 'surprise',    label: 'Surprise me',      icon: Dices },
+    { key: 'ingredients', label: 'From ingredients', icon: ListChecks },
+    { key: 'photo',       label: 'From a photo',     icon: Camera },
+  ]
+  const MODE_CATEGORIES = ['any', 'Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert']
+  const CAT_EMOJI = { any: '🎲', Breakfast: '🍳', Lunch: '🥗', Dinner: '🍝', Snack: '🍎', Dessert: '🍰' }
+
   return (
     <div className="max-w-2xl lg:max-w-3xl mx-auto px-4 pt-4 sm:pt-6" style={{ animation:'fadeIn 0.35s ease' }}>
 
@@ -378,27 +389,9 @@ export default function AISuggestionsPage() {
           Meal ideas
         </h1>
         <p style={{ fontSize: 13.5, color: 'var(--text-3)', marginTop: 5, lineHeight: 1.5 }}>
-          Tell me what's in your fridge — I'll suggest meals you can make right now.
+          Three ways to find your next meal.
         </p>
       </div>
-
-      {/* Recommend me something — one AI-suggested recipe, ready to save */}
-      <button onClick={handleRecommendSomething} disabled={recommendLoading}
-        className="w-full flex items-center gap-3.5 mb-5 tap-target press"
-        style={{ padding: '15px 17px', borderRadius: 18, border: '1.5px solid var(--accent)', background: 'linear-gradient(135deg, var(--accent-light) 0%, var(--surface) 100%)', animation: 'slideUp 0.4s ease 0.05s both' }}>
-        <div className="flex items-center justify-center shrink-0" style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--accent)' }}>
-          {recommendLoading
-            ? <Loader2 size={19} className="animate-[spin_1s_linear_infinite]" style={{ color: '#1A1C16' }} />
-            : <Dices size={19} style={{ color: '#1A1C16' }} />}
-        </div>
-        <div className="flex-1 text-left">
-          <p className="font-display font-bold" style={{ fontSize: 15.5, color: 'var(--text)' }}>
-            {recommendLoading ? 'Thinking of something…' : 'Recommend me something'}
-          </p>
-          <p style={{ fontSize: 12, color: 'var(--text-3)' }}>A new recipe idea based on your library</p>
-        </div>
-        {!recommendLoading && <ArrowRight size={17} style={{ color: 'var(--accent-dark)' }} />}
-      </button>
 
       {/* Context chips */}
       <div className="flex flex-wrap gap-2 mb-5 mt-3" style={{ animation:'slideUp 0.4s ease 0.03s both' }}>
@@ -412,6 +405,66 @@ export default function AISuggestionsPage() {
           <BookOpen size={12} /> {meals.length} recipes
         </span>
       </div>
+
+      {/* Mode switcher — one AI feature shown at a time instead of a long stack */}
+      <div className="grid grid-cols-3 gap-2 mb-5" style={{ animation: 'slideUp 0.4s ease 0.035s both' }}>
+        {MODES.map(({ key, label, icon: Icon }) => {
+          const active = activeMode === key
+          return (
+            <button key={key} onClick={() => setActiveMode(key)}
+              className="flex flex-col items-center gap-1.5 tap-target press transition-all"
+              style={{
+                padding: '12px 6px', borderRadius: 16,
+                background: active ? 'var(--accent)' : 'var(--surface)',
+                border: `1.5px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+              }}>
+              <Icon size={18} style={{ color: active ? '#1A1C16' : 'var(--text-2)' }} />
+              <span style={{ fontSize: 11.5, fontWeight: 700, color: active ? '#1A1C16' : 'var(--text-2)', textAlign: 'center', lineHeight: 1.2 }}>
+                {label}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ═══════════ Mode: Surprise me ═══════════ */}
+      {activeMode === 'surprise' && (
+        <div className="card p-5 sm:p-6 mb-6" style={{ animation: 'slideUp 0.35s ease both' }}>
+          <p style={{ fontSize: 13.5, color: 'var(--text-2)', lineHeight: 1.5, marginBottom: 16 }}>
+            One new recipe idea, based on the style of what you already cook.
+          </p>
+
+          <p className="input-label mb-2">Category</p>
+          <div className="flex flex-wrap gap-1.5 mb-5">
+            {MODE_CATEGORIES.map(cat => {
+              const active = recommendCategory === cat
+              return (
+                <button key={cat} onClick={() => setRecommendCategory(cat)}
+                  className="tap-target transition-all"
+                  style={{
+                    padding: '7px 13px', borderRadius: 99, fontSize: 12.5, fontWeight: 600,
+                    background: active ? 'var(--accent)' : 'var(--surface-2)',
+                    color: active ? '#1A1C16' : 'var(--text-2)',
+                    border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                  }}>
+                  {CAT_EMOJI[cat]} {cat === 'any' ? 'Any' : cat}
+                </button>
+              )
+            })}
+          </div>
+
+          <button onClick={handleRecommendSomething} disabled={recommendLoading}
+            className="btn-primary btn-lg btn w-full tap-target gap-2">
+            {recommendLoading
+              ? <><Loader2 size={17} className="animate-[spin_1s_linear_infinite]" /> Thinking of something…</>
+              : <><Dices size={17} /> Recommend me something</>}
+          </button>
+        </div>
+      )}
+
+      {/* ═══════════ Mode: From a photo (dish → recipe) ═══════════ */}
+      {activeMode === 'photo' && (
+      <div style={{ animation: 'slideUp 0.35s ease both' }}>
 
       {/* Photo → recipe card */}
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment"
@@ -485,7 +538,12 @@ export default function AISuggestionsPage() {
           </>
         )}
       </div>
+      </div>
+      )}
 
+      {/* ═══════════ Mode: From ingredients (photo of fridge, or type it) ═══════════ */}
+      {activeMode === 'ingredients' && (
+      <div style={{ animation: 'slideUp 0.35s ease both' }}>
       {/* Cook from my fridge card */}
       <input ref={fridgeCameraRef} type="file" accept="image/*" capture="environment"
         onChange={handleFridgePhoto} style={{ display: 'none' }} />
@@ -652,7 +710,7 @@ export default function AISuggestionsPage() {
       {/* divider */}
       <div className="flex items-center gap-3 mb-4" style={{ animation: 'slideUp 0.4s ease 0.045s both' }}>
         <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-        <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>or type ingredients</span>
+        <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>or type it in</span>
         <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
       </div>
 
@@ -715,6 +773,7 @@ export default function AISuggestionsPage() {
               <option value="Lunch">🥗 Lunch</option>
               <option value="Dinner">🍝 Dinner</option>
               <option value="Snack">🍎 Snack</option>
+              <option value="Dessert">🍰 Dessert</option>
             </select>
           </div>
         </div>
@@ -822,9 +881,11 @@ export default function AISuggestionsPage() {
           </div>
           <p className="font-display font-semibold mb-2" style={{ fontSize:18, color:'var(--text)', letterSpacing:'-0.02em' }}>Ready when you are</p>
           <p style={{ color:'var(--text-3)', fontSize:14, maxWidth:300, lineHeight:1.6 }}>
-            Enter your ingredients, pick a search mode, and hit <strong style={{ color:'var(--text)' }}>Get Suggestions</strong>.
+            Scan your fridge or type what you have, then hit <strong style={{ color:'var(--text)' }}>Get Suggestions</strong>.
           </p>
         </div>
+      )}
+      </div>
       )}
 
       {reviewTarget && (

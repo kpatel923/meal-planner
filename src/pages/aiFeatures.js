@@ -4,27 +4,87 @@ import { supabase } from './supabase'
 // The Groq API key lives server-side only (set as a Supabase secret).
 // This file never touches the key directly. Provider-agnostic by design.
 
-async function callAI(prompt, maxTokens = 400, imageBase64 = null) {
+// Pull a suggested wait (seconds) out of Groq's rate-limit message, if present.
+function parseRetrySeconds(msg) {
+  const m = /try again in ([\d.]+)\s*s/i.exec(msg || '')
+  const secs = m ? parseFloat(m[1]) : NaN
+  return Number.isFinite(secs) ? Math.min(secs, 30) : null
+}
+
+function isRateLimit(msg) {
+  return /429|rate limit/i.test(msg || '')
+}
+
+// Robustly pull a JSON object out of a model response. Reasoning models (and
+// chatty ones) often wrap the answer in <think> blocks, markdown fences, or a
+// sentence of preamble — a bare JSON.parse would fail on all of those. This
+// strips the noise and extracts the first balanced {...} block.
+export function extractJSON(raw) {
+  if (!raw || typeof raw !== 'string') throw new Error('Empty AI response')
+  let s = raw
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')   // reasoning blocks
+    .replace(/<\/?think>/gi, '')                 // stray/unclosed tags
+    .replace(/```json|```/g, '')                 // markdown fences
+    .trim()
+
+  // Fast path: already valid JSON.
+  try { return JSON.parse(s) } catch { /* keep going */ }
+
+  // Otherwise find the first balanced object, ignoring braces inside strings.
+  const start = s.indexOf('{')
+  if (start === -1) throw new Error('No JSON object in AI response')
+  let depth = 0, inStr = false, esc = false
+  for (let i = start; i < s.length; i++) {
+    const c = s[i]
+    if (esc) { esc = false; continue }
+    if (c === '\\') { esc = true; continue }
+    if (c === '"') { inStr = !inStr; continue }
+    if (inStr) continue
+    if (c === '{') depth++
+    else if (c === '}') {
+      depth--
+      if (depth === 0) return JSON.parse(s.slice(start, i + 1))
+    }
+  }
+  throw new Error('Incomplete JSON in AI response')
+}
+
+async function callAI(prompt, maxTokens = 400, imageBase64 = null, opts = {}) {
+  const { jsonMode = false, _attempt = 0 } = opts
   const body = { prompt, maxTokens }
   if (imageBase64) body.imageBase64 = imageBase64
+  if (jsonMode) body.jsonMode = true
 
   const { data, error } = await supabase.functions.invoke('ai-chef', { body })
 
+  let detail = null
   if (error) {
-    let detail = error.message
+    detail = error.message
     try {
       if (error.context && typeof error.context.json === 'function') {
         const body = await error.context.json()
         if (body?.error) detail = body.error
       }
     } catch { /* fall back to generic message */ }
+  } else if (data?.error) {
+    detail = data.error
+  }
+
+  if (detail) {
+    // Rate limited: wait the suggested time and retry once or twice. Groq's
+    // free tier is 8k tokens/minute, which a vision call can bump into.
+    if (isRateLimit(detail) && _attempt < 2) {
+      const wait = parseRetrySeconds(detail) ?? 6
+      await new Promise(r => setTimeout(r, (wait + 0.5) * 1000))
+      return callAI(prompt, maxTokens, imageBase64, { ...opts, _attempt: _attempt + 1 })
+    }
     console.error('AI Chef error:', detail)
+    if (isRateLimit(detail)) {
+      throw new Error('AI is busy right now (rate limit) — wait a few seconds and try again.')
+    }
     throw new Error(detail || 'AI request failed')
   }
-  if (data?.error) {
-    console.error('AI Chef server error:', data.error)
-    throw new Error(data.error)
-  }
+
   if (data?._debug) {
     console.log('[ai-chef debug]', data._debug)
   }
@@ -50,7 +110,23 @@ Respond with ONLY the description, no preamble.`
   return callAI(prompt, 150)
 }
 
-// ── AI Meal Suggestions ────────────────────────────────────────────────
+// ── AI Daily Summary (Today page) ──────────────────────────────────────
+// Given today's meals and how many are done, returns a short warm recap plus
+// one inspiring line. Returns a plain string.
+export async function generateDailySummary({ meals, doneCount, totalCount, calories, calorieGoal }) {
+  const mealList = meals.length ? meals.join(', ') : 'no meals planned yet'
+  const progress = totalCount > 0 ? `${doneCount} of ${totalCount} meals cooked` : 'nothing planned'
+  const calLine = calories && calorieGoal ? ` About ${calories} of ${calorieGoal} calories so far.` : ''
+
+  const prompt = `You are a warm, encouraging meal companion. Write a short daily note (max 45 words, 2 sentences) for someone's meal day. First sentence: a friendly recap of their day's food and cooking progress. Second sentence: one genuinely uplifting, non-cheesy line to inspire them (about nourishment, self-care, or momentum — vary it).
+
+Today's meals: ${mealList}
+Progress: ${progress}.${calLine}
+
+Respond with ONLY the note, no preamble, no quotes.`
+
+  return callAI(prompt, 120)
+}
 // sourceMode: 'library' = only use existing meals | 'web' = suggest new ones | 'both' = mixed
 // dietPreferences: array like ['veg','vegan','nonveg'] from the user's profile
 export async function getMealSuggestions({
@@ -102,8 +178,7 @@ Respond with a JSON array ONLY, no markdown backticks, no preamble:
 
   const raw = await callAI(prompt, 800)
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     return Array.isArray(parsed) ? parsed : []
   } catch (e) {
     console.error('Failed to parse AI suggestions:', raw)
@@ -128,6 +203,61 @@ export async function generateRecipeTagline(mealName, ingredients) {
 // description). For media it returns SEARCH links (YouTube/Google) rather than
 // fabricated direct URLs — an LLM can't verify a real video/photo exists, so we
 // never invent one. Everything is editable; the user reviews before saving.
+// ── Cook Mode step generation ─────────────────────────────────────────
+// Turns a recipe into clean numbered steps with optional per-step timers.
+// Uses stored detail_notes/ingredients as context. Cached by the caller.
+export async function generateCookSteps(meal) {
+  const name = meal?.item_name || 'this dish'
+  const ingredients = meal?.ingredients || ''
+  const notes = meal?.detail_notes || ''
+
+  const prompt = `You are a cooking guide. Break "${name}" into clear, ordered cooking steps for a home cook.
+Ingredients: ${ingredients}
+${notes ? `Notes: ${notes}` : ''}
+
+Respond with JSON ONLY (no markdown):
+{"steps":[{"text":"what to do in this step, 1-2 sentences","timerSeconds": <seconds if this step involves waiting/cooking/baking, else null>}]}
+
+Rules:
+- 4 to 8 steps. Concrete and practical.
+- Add timerSeconds ONLY for steps with real waiting (boiling, baking, simmering, resting). Use null otherwise.
+- Keep each step short enough to read at a glance while cooking.`
+
+  const raw = await callAI(prompt, 700)
+  let parsed
+  try {
+    parsed = extractJSON(raw)
+  } catch {
+    // Fallback: split detail_notes into sentence steps if AI parse fails.
+    const sentences = (notes || `Prepare ${name} using: ${ingredients}`)
+      .split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean)
+    return sentences.slice(0, 8).map(text => ({ text, timerSeconds: null }))
+  }
+  if (!parsed.steps || !parsed.steps.length) {
+    return [{ text: `Prepare ${name} using: ${ingredients}`, timerSeconds: null }]
+  }
+  return parsed.steps.map(s => ({
+    text: s.text || '',
+    timerSeconds: Number.isFinite(s.timerSeconds) ? s.timerSeconds : null,
+  })).filter(s => s.text)
+}
+
+// Fetch a real, relevant food photo for a dish via the image-search function
+// (Pexels, server-side). Returns a URL string or null. Never throws —
+// a missing photo should never block adding a recipe.
+export async function searchRecipeImage(query) {
+  if (!query || !query.trim()) return null
+  try {
+    const { data, error } = await supabase.functions.invoke('image-search', {
+      body: { query: query.trim() },
+    })
+    if (error) return null
+    return data?.url || null
+  } catch {
+    return null
+  }
+}
+
 export async function generateRecipeFromName(name) {
   if (!name || !name.trim()) throw new Error('Enter a meal name first')
   const dish = name.trim()
@@ -145,7 +275,7 @@ Rules:
   const raw = await callAI(prompt, 400)
   let parsed
   try {
-    parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    parsed = extractJSON(raw)
   } catch {
     throw new Error('Could not generate that recipe — try a different name or enter it manually')
   }
@@ -208,8 +338,7 @@ If you genuinely cannot infer a dish, respond with:
 
   const raw = await callAI(prompt, 350)
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     return {
       name:        parsed.name || meta.title || '',
       category:    parsed.category || 'Dinner',
@@ -260,10 +389,9 @@ Provide:
 Respond with JSON ONLY, no markdown backticks, no preamble:
 {"isFood":true,"name":"Dish Name","ingredients":"ing1, ing2, ing3","diet_type":"veg","category":"Lunch","description":"A short honest description.","searchQuery":"dish name recipe","prepTime":25,"caloriesPerServing":480,"confidence":"medium"}`
 
-  const raw = await callAI(prompt, 500, imageBase64)
+  const raw = await callAI(prompt, 600, imageBase64, { jsonMode: true })
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     if (parsed.isFood === false || (!parsed.name && !parsed.ingredients)) {
       throw new Error("That doesn't look like a meal — try another photo")
     }
@@ -280,8 +408,15 @@ Respond with JSON ONLY, no markdown backticks, no preamble:
     }
   } catch (e) {
     if (e.message?.includes("doesn't look like")) throw e
-    console.error('Failed to parse meal photo analysis:', raw)
-    throw new Error('Could not read that photo — try a clearer shot of the dish')
+    console.error('Failed to parse meal photo analysis. Raw model output:', raw)
+    // Surface a snippet of what actually came back — "try a clearer photo" is
+    // misleading when the real problem is the model replying with prose.
+    const snippet = (raw || '').trim().slice(0, 120).replace(/\s+/g, ' ')
+    throw new Error(
+      snippet
+        ? `AI didn't return recipe data. It said: "${snippet}…"`
+        : 'AI returned an empty response — try again in a moment'
+    )
   }
 }
 
@@ -307,10 +442,9 @@ Respond with JSON ONLY, no markdown, no preamble:
 If the photo contains no identifiable food, respond:
 {"isFood":false,"ingredients":[]}`
 
-  const raw = await callAI(prompt, 400, imageBase64)
+  const raw = await callAI(prompt, 500, imageBase64, { jsonMode: true })
   try {
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const parsed = JSON.parse(clean)
+    const parsed = extractJSON(raw)
     if (parsed.isFood === false || !Array.isArray(parsed.ingredients) || parsed.ingredients.length === 0) {
       throw new Error("Couldn't spot any ingredients — try a clearer, well-lit photo")
     }
@@ -326,5 +460,44 @@ If the photo contains no identifiable food, respond:
     if (e.message?.includes("Couldn't spot")) throw e
     console.error('Failed to parse fridge detection:', raw)
     throw new Error('Could not read that photo — try a clearer, well-lit shot')
+  }
+}
+
+// ── AI Recipe Recommendation ────────────────────────────────────────────
+// Suggests ONE new recipe the user doesn't already have, based on their
+// existing library (so it complements their taste but isn't a duplicate) and
+// diet preferences. Returns a form-ready object: item_name, category,
+// diet_type, ingredients, prep_time, calories.
+export async function recommendNewRecipe(existingMeals = [], dietPrefs = [], category = 'any') {
+  const names = existingMeals.map(m => m.item_name).filter(Boolean)
+  const sample = names.slice(0, 60).join(', ') || 'no recipes yet'
+  const diets = dietPrefs.length ? dietPrefs.join('/') : 'any'
+  const catLine = category && category !== 'any'
+    ? `It MUST be a ${category} recipe.`
+    : 'Pick whichever category (Breakfast/Lunch/Dinner/Snack/Dessert) feels like the best fit.'
+
+  const prompt = `You are a meal-planning assistant. Suggest ONE new recipe this
+person doesn't already have, based on the style of their existing recipes below.
+It should feel like a natural fit for their taste, but be genuinely NEW — not a
+near-duplicate of anything already in the list. ${catLine}
+
+Their existing recipes: ${sample}
+Diet preference: ${diets}
+
+Respond with JSON ONLY, no markdown, no preamble:
+{"item_name":"Recipe Name","category":"Breakfast|Lunch|Dinner|Snack|Dessert","diet_type":"veg|vegan|nonveg","ingredients":"comma, separated, ingredients","prep_time":25,"calories":350}`
+
+  const raw = await callAI(prompt, 400, null, { jsonMode: true })
+  const parsed = extractJSON(raw)
+  if (!parsed.item_name || !parsed.category) {
+    throw new Error('AI could not come up with a suggestion — try again')
+  }
+  return {
+    item_name: String(parsed.item_name).trim(),
+    category: ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Dessert'].includes(parsed.category) ? parsed.category : 'Dinner',
+    diet_type: ['veg', 'vegan', 'nonveg'].includes(parsed.diet_type) ? parsed.diet_type : 'veg',
+    ingredients: String(parsed.ingredients || '').trim(),
+    prep_time: Number.isFinite(parsed.prep_time) ? parsed.prep_time : '',
+    calories: Number.isFinite(parsed.calories) ? parsed.calories : '',
   }
 }
